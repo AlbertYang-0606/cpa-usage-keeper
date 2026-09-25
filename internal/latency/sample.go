@@ -9,7 +9,9 @@ import (
 
 const (
 	// MaxSamplePoints 是每个 Latency 聚合行允许保存的真实配对点上限。
-	MaxSamplePoints = 2500
+	MaxSamplePoints = 1000
+	// MaxEncodedSamplePoints 保留对已部署 2500 点 BLOB 的完整解码能力。
+	MaxEncodedSamplePoints = 2500
 )
 
 // SamplePoint 保存同一请求的 TTFT/Latency 配对，priority 只用于稳定抽样。
@@ -57,7 +59,7 @@ func (samples *SampleSet) Merge(other *SampleSet) error {
 	if samples.points == nil {
 		samples.points = make(map[int64]SamplePoint)
 	}
-	// 先把整批点加入 map，最后统一排序和裁剪；旧集合已满时不再为每个新点重复排序 2500 项。
+	// 先把整批点加入 map 并检查冲突，最后统一裁剪；旧 BLOB 的尾部也必须参与检查。
 	for _, point := range other.points {
 		if err := samples.addPoint(point); err != nil {
 			return err
@@ -119,6 +121,9 @@ func (samples *SampleSet) MarshalBinary() ([]byte, error) {
 		return nil, fmt.Errorf("sample set is nil")
 	}
 	points := samples.Points()
+	if len(points) > MaxSamplePoints {
+		return nil, fmt.Errorf("new sample encoding count %d exceeds limit %d", len(points), MaxSamplePoints)
+	}
 	encoded := []byte{FormatVersion}
 	encoded = binary.AppendUvarint(encoded, uint64(len(points)))
 	for _, point := range points {
@@ -223,8 +228,8 @@ func walkSampleSet(encoded []byte, visit func(SamplePoint)) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if count > MaxSamplePoints {
-		return 0, fmt.Errorf("sample count %d exceeds limit %d", count, MaxSamplePoints)
+	if count > MaxEncodedSamplePoints {
+		return 0, fmt.Errorf("sample count %d exceeds limit %d", count, MaxEncodedSamplePoints)
 	}
 	var previous SamplePoint
 	for index := uint64(0); index < count; index++ {
@@ -264,7 +269,7 @@ func (samples *SampleSet) trim() (SamplePoint, bool) {
 	if len(samples.points) <= MaxSamplePoints {
 		return SamplePoint{}, false
 	}
-	// 仅找出最小的 2500 点：最大堆堆顶始终是当前应保留集合中最差的点。
+	// 仅找出最小的 1000 点：最大堆堆顶始终是当前应保留集合中最差的点。
 	// 比较键与 Points/旧版 trim 完全相同；最终输出时才进行稳定排序。
 	points := make([]SamplePoint, 0, len(samples.points))
 	for _, point := range samples.points {

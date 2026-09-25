@@ -178,8 +178,12 @@ func WritePreparedRows(tx *gorm.DB, rows []entities.UsageLatencyStat) error {
 		if _, exists := seen[key]; exists {
 			return fmt.Errorf("duplicate latency row key %+v", key)
 		}
-		if _, err := decodeLatencyRow(row); err != nil {
+		decoded, err := decodeLatencyRow(row)
+		if err != nil {
 			return fmt.Errorf("decode prepared latency row %+v: %w", key, err)
+		}
+		if decoded.SamplePoints.Count() > latency.MaxSamplePoints {
+			return fmt.Errorf("prepared latency row %+v has %d sample points above write limit %d", key, decoded.SamplePoints.Count(), latency.MaxSamplePoints)
 		}
 		seen[key] = struct{}{}
 		if row.ID > 0 {
@@ -233,7 +237,7 @@ func decodeLatencyRow(row entities.UsageLatencyStat) (decodedRow, error) {
 	if err != nil {
 		return decodedRow{}, fmt.Errorf("decode sample points: %w", err)
 	}
-	// 两个 Sketch 必须覆盖全部样本；真实点允许因 2500 上限少于 SampleCount。
+	// 两个 Sketch 必须覆盖全部样本；兼容读取的旧 BLOB 最多 2500 点，新写入最多 1000 点。
 	if ttftSketch.Count() != uint64(row.SampleCount) || latencySketch.Count() != uint64(row.SampleCount) || int64(samplePoints.Count()) > row.SampleCount {
 		return decodedRow{}, fmt.Errorf("latency payload counts do not match sample_count %d", row.SampleCount)
 	}

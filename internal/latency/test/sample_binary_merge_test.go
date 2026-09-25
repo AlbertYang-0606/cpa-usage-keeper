@@ -31,7 +31,7 @@ func TestMergeBinaryRejectsMalformedFieldsAndAcceptsEmpty(t *testing.T) {
 	badHash.Priority++
 	zeroTTFT := ordered[0]
 	zeroTTFT.TTFTMS = 0
-	tooMany := binary.AppendUvarint([]byte{latency.FormatVersion}, latency.MaxSamplePoints+1)
+	tooMany := binary.AppendUvarint([]byte{latency.FormatVersion}, latency.MaxEncodedSamplePoints+1)
 	for name, encoded := range map[string][]byte{
 		"priority mismatch":   makeBlob(badHash),
 		"duplicate event":     makeBlob(ordered[0], ordered[0]),

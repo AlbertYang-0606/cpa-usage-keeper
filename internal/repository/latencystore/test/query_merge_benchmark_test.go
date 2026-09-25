@@ -96,7 +96,7 @@ func BenchmarkQueryMergeDiagnosticsRows(b *testing.B) {
 		{"dense_8x450", 8, 450},
 		{"month_30x500", 30, 500},
 		{"month_1500x500", 1500, 500},
-		{"saturated_32x2500", 32, 2500},
+		{"saturated_32x1000", 32, 1000},
 	} {
 		b.Run(size.name, func(b *testing.B) {
 			start := time.Date(2026, 7, 26, 8, 0, 0, 0, time.UTC)
