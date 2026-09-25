@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"slices"
@@ -11,6 +12,58 @@ import (
 	"cpa-usage-keeper/internal/latency"
 	"cpa-usage-keeper/internal/repository/latencystore"
 )
+
+func TestQueryMergeMatchesDecodedSampleOracleExactly(t *testing.T) {
+	start := time.Date(2026, 7, 26, 8, 0, 0, 0, time.UTC)
+	events := make([]entities.UsageEvent, 0, 6400)
+	for index := 0; index < 6400; index++ {
+		id := int64(index + 1)
+		events = append(events, latencyStoreTestEvent(id, start.Add(time.Duration(index/800)*time.Hour+time.Duration(index%800)*time.Second), 10+id%107, 100+id%251))
+	}
+	rows := latencyStoreTestRows(t, events, entities.UsageLatencyBucketHour)
+	reversed := slices.Clone(rows)
+	slices.Reverse(reversed)
+	for _, order := range [][]entities.UsageLatencyStat{rows, reversed} {
+		wantSamples := latency.NewSampleSet()
+		wantTTFT, wantLatency := latency.NewSketch(), latency.NewSketch()
+		var wantCount, wantMaxTTFT, wantMaxLatency int64
+		for _, row := range order {
+			decoded, err := latency.UnmarshalSampleSet(row.SamplePoints)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := wantSamples.Merge(decoded); err != nil {
+				t.Fatal(err)
+			}
+			ttft, err := latency.UnmarshalSketch(row.TTFTSketch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			latencySketch, err := latency.UnmarshalSketch(row.LatencySketch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := wantTTFT.Merge(ttft); err != nil {
+				t.Fatal(err)
+			}
+			if err := wantLatency.Merge(latencySketch); err != nil {
+				t.Fatal(err)
+			}
+			wantCount += row.SampleCount
+			wantMaxTTFT = max(wantMaxTTFT, row.MaxTTFTMS)
+			wantMaxLatency = max(wantMaxLatency, row.MaxLatencyMS)
+		}
+		got, err := latencystore.MergeDiagnosticsRows(order)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantBlob, _ := wantSamples.MarshalBinary()
+		gotBlob, _ := got.SamplePoints.MarshalBinary()
+		if !bytes.Equal(gotBlob, wantBlob) || got.SampleCount != wantCount || got.MaxTTFTMS != wantMaxTTFT || got.MaxLatencyMS != wantMaxLatency || got.TTFTSketch.P95() != wantTTFT.P95() || got.LatencySketch.P95() != wantLatency.P95() {
+			t.Fatalf("query merge differs from decoded merge oracle: points=%d/%d count=%d/%d p95=%d,%d/%d,%d", got.SamplePoints.Count(), wantSamples.Count(), got.SampleCount, wantCount, got.TTFTSketch.P95(), got.LatencySketch.P95(), wantTTFT.P95(), wantLatency.P95())
+		}
+	}
+}
 
 func TestLatencyDiagnosticsMergeCombinesExactCountersSketchesAndStableSamples(t *testing.T) {
 	start := time.Date(2026, 7, 26, 8, 0, 0, 0, time.UTC)

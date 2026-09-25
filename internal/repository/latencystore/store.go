@@ -46,10 +46,10 @@ func MergeDiagnosticsRows(rows []entities.UsageLatencyStat) (DiagnosticsAggregat
 	aggregate := DiagnosticsAggregate{
 		TTFTSketch:    latency.NewSketch(),
 		LatencySketch: latency.NewSketch(),
-		SamplePoints:  latency.NewSampleSet(),
 	}
+	sampleMerger := latency.NewQuerySampleMerger()
 	for index, row := range rows {
-		decoded, err := decodeLatencyRow(row)
+		ttftSketch, latencySketch, err := decodeQueryLatencyRow(row, sampleMerger)
 		if err != nil {
 			return DiagnosticsAggregate{}, fmt.Errorf("decode latency diagnostics row %d: %w", index, err)
 		}
@@ -57,14 +57,11 @@ func MergeDiagnosticsRows(rows []entities.UsageLatencyStat) (DiagnosticsAggregat
 			return DiagnosticsAggregate{}, fmt.Errorf("sample count overflow")
 		}
 		// 三种可合并表示必须全部成功，避免 P95 与真实配对点来自不同的行集合。
-		if err := aggregate.TTFTSketch.Merge(decoded.TTFTSketch); err != nil {
+		if err := aggregate.TTFTSketch.Merge(ttftSketch); err != nil {
 			return DiagnosticsAggregate{}, fmt.Errorf("merge TTFT sketch row %d: %w", index, err)
 		}
-		if err := aggregate.LatencySketch.Merge(decoded.LatencySketch); err != nil {
+		if err := aggregate.LatencySketch.Merge(latencySketch); err != nil {
 			return DiagnosticsAggregate{}, fmt.Errorf("merge latency sketch row %d: %w", index, err)
-		}
-		if err := aggregate.SamplePoints.Merge(decoded.SamplePoints); err != nil {
-			return DiagnosticsAggregate{}, fmt.Errorf("merge sample points row %d: %w", index, err)
 		}
 		aggregate.SampleCount += row.SampleCount
 		aggregate.MaxTTFTMS = max(aggregate.MaxTTFTMS, row.MaxTTFTMS)
@@ -74,7 +71,34 @@ func MergeDiagnosticsRows(rows []entities.UsageLatencyStat) (DiagnosticsAggregat
 	if aggregate.TTFTSketch.Count() != uint64(aggregate.SampleCount) || aggregate.LatencySketch.Count() != uint64(aggregate.SampleCount) {
 		return DiagnosticsAggregate{}, fmt.Errorf("merged latency payload counts do not match sample_count %d", aggregate.SampleCount)
 	}
+	aggregate.SamplePoints = sampleMerger.TakeSamples()
 	return aggregate, nil
+}
+
+// decodeQueryLatencyRow 直接校验编码样本并筛选候选点，避免为每个查询行构造 SampleSet map。
+func decodeQueryLatencyRow(row entities.UsageLatencyStat, merger *latency.QuerySampleMerger) (*latency.Sketch, *latency.Sketch, error) {
+	if row.FormatVersion != latency.FormatVersion {
+		return nil, nil, fmt.Errorf("unsupported format version %d", row.FormatVersion)
+	}
+	if row.SampleCount < 0 || row.MaxTTFTMS <= 0 || row.MaxLatencyMS <= 0 {
+		return nil, nil, fmt.Errorf("invalid latency counters")
+	}
+	ttftSketch, err := latency.UnmarshalSketch(row.TTFTSketch)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode TTFT sketch: %w", err)
+	}
+	latencySketch, err := latency.UnmarshalSketch(row.LatencySketch)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode latency sketch: %w", err)
+	}
+	count, err := merger.MergeBinary(row.SamplePoints)
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode sample points: %w", err)
+	}
+	if ttftSketch.Count() != uint64(row.SampleCount) || latencySketch.Count() != uint64(row.SampleCount) || int64(count) > row.SampleCount {
+		return nil, nil, fmt.Errorf("latency payload counts do not match sample_count %d", row.SampleCount)
+	}
+	return ttftSketch, latencySketch, nil
 }
 
 // ApplyRows 保留 migration 的同事务入口；运行时使用 PrepareRows 与 WritePreparedRows 分离 Reader/Writer。

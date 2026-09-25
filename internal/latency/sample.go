@@ -132,61 +132,137 @@ func (samples *SampleSet) MarshalBinary() ([]byte, error) {
 
 // UnmarshalSampleSet 严格验证版本、边界、顺序、priority 和重复 event ID。
 func UnmarshalSampleSet(encoded []byte) (*SampleSet, error) {
-	if len(encoded) == 0 {
-		return nil, fmt.Errorf("sample data is empty")
-	}
-	if encoded[0] != FormatVersion {
-		return nil, fmt.Errorf("unsupported sample version %d", encoded[0])
-	}
-	offset := 1
-	count, err := readUvarint(encoded, &offset, "sample count")
+	samples := NewSampleSet()
+	_, err := walkSampleSet(encoded, func(point SamplePoint) {
+		samples.points[point.EventID] = point
+	})
 	if err != nil {
 		return nil, err
-	}
-	if count > MaxSamplePoints {
-		return nil, fmt.Errorf("sample count %d exceeds limit %d", count, MaxSamplePoints)
-	}
-	samples := NewSampleSet()
-	var previous SamplePoint
-	for index := uint64(0); index < count; index++ {
-		eventID, err := readPositiveInt64(encoded, &offset, "sample event ID")
-		if err != nil {
-			return nil, err
-		}
-		priority, err := readUvarint(encoded, &offset, "sample priority")
-		if err != nil {
-			return nil, err
-		}
-		ttftMS, err := readPositiveInt64(encoded, &offset, "sample TTFT")
-		if err != nil {
-			return nil, err
-		}
-		latencyMS, err := readPositiveInt64(encoded, &offset, "sample latency")
-		if err != nil {
-			return nil, err
-		}
-		point := SamplePoint{EventID: eventID, Priority: priority, TTFTMS: ttftMS, LatencyMS: latencyMS}
-		if priority != splitMix64(uint64(eventID)) {
-			return nil, fmt.Errorf("sample priority does not match event %d", eventID)
-		}
-		if index > 0 && !samplePointLess(previous, point) {
-			return nil, fmt.Errorf("sample points must be strictly ordered")
-		}
-		if _, exists := samples.points[eventID]; exists {
-			return nil, fmt.Errorf("duplicate sample event %d", eventID)
-		}
-		samples.points[eventID] = point
-		previous = point
-	}
-	if offset != len(encoded) {
-		return nil, fmt.Errorf("sample data has trailing bytes")
 	}
 	return samples, nil
 }
 
-func (samples *SampleSet) trim() {
+// QuerySampleMerger 独占查询中的样本集合，缓存当前最差保留点。
+// TakeSamples 后所有权交还调用方，此前不得通过其他路径修改内部集合。
+type QuerySampleMerger struct {
+	samples *SampleSet
+	worst   SamplePoint
+	full    bool
+}
+
+func NewQuerySampleMerger() *QuerySampleMerger {
+	return &QuerySampleMerger{samples: NewSampleSet()}
+}
+
+// MergeBinary 校验完整 BLOB 后才更改集合；未入选的行复用已知截止点。
+func (merger *QuerySampleMerger) MergeBinary(encoded []byte) (int, error) {
+	if merger == nil || merger.samples == nil {
+		return 0, fmt.Errorf("query sample merger is closed")
+	}
+	samples := merger.samples
+	var candidates []SamplePoint
+	var conflictEvent int64
+	count, err := walkSampleSet(encoded, func(point SamplePoint) {
+		// 旧集合直到整行解析结束保持不变，因此即使该点随后会被裁剪，冲突也不会漏报。
+		if previous, exists := samples.points[point.EventID]; exists {
+			if previous != point && conflictEvent == 0 {
+				conflictEvent = point.EventID
+			}
+			return
+		}
+		if !merger.full || samplePointLess(point, merger.worst) {
+			candidates = append(candidates, point)
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	if conflictEvent != 0 {
+		return 0, fmt.Errorf("conflicting sample for event %d", conflictEvent)
+	}
+	if len(candidates) == 0 {
+		return count, nil
+	}
+	for _, point := range candidates {
+		samples.points[point.EventID] = point
+	}
+	if worst, trimmed := samples.trim(); trimmed {
+		merger.worst, merger.full = worst, true
+	} else if len(samples.points) == MaxSamplePoints {
+		// 首次达到上限时只扫描一次；后续未入选行不重复扫描。
+		for _, point := range samples.points {
+			if samplePointLess(merger.worst, point) {
+				merger.worst = point
+			}
+		}
+		merger.full = true
+	}
+	return count, nil
+}
+
+// TakeSamples 结束查询合并并转移集合所有权，阻止随后使用过期截止点。
+func (merger *QuerySampleMerger) TakeSamples() *SampleSet {
+	if merger == nil {
+		return nil
+	}
+	samples := merger.samples
+	merger.samples = nil
+	return samples
+}
+
+// walkSampleSet 与写入端共用严格格式检查；匹配 hash 的 event ID 重复必然违反严格排序。
+func walkSampleSet(encoded []byte, visit func(SamplePoint)) (int, error) {
+	if len(encoded) == 0 {
+		return 0, fmt.Errorf("sample data is empty")
+	}
+	if encoded[0] != FormatVersion {
+		return 0, fmt.Errorf("unsupported sample version %d", encoded[0])
+	}
+	offset := 1
+	count, err := readUvarint(encoded, &offset, "sample count")
+	if err != nil {
+		return 0, err
+	}
+	if count > MaxSamplePoints {
+		return 0, fmt.Errorf("sample count %d exceeds limit %d", count, MaxSamplePoints)
+	}
+	var previous SamplePoint
+	for index := uint64(0); index < count; index++ {
+		eventID, err := readPositiveInt64(encoded, &offset, "sample event ID")
+		if err != nil {
+			return 0, err
+		}
+		priority, err := readUvarint(encoded, &offset, "sample priority")
+		if err != nil {
+			return 0, err
+		}
+		ttftMS, err := readPositiveInt64(encoded, &offset, "sample TTFT")
+		if err != nil {
+			return 0, err
+		}
+		latencyMS, err := readPositiveInt64(encoded, &offset, "sample latency")
+		if err != nil {
+			return 0, err
+		}
+		point := SamplePoint{EventID: eventID, Priority: priority, TTFTMS: ttftMS, LatencyMS: latencyMS}
+		if priority != splitMix64(uint64(eventID)) {
+			return 0, fmt.Errorf("sample priority does not match event %d", eventID)
+		}
+		if index > 0 && !samplePointLess(previous, point) {
+			return 0, fmt.Errorf("sample points must be strictly ordered")
+		}
+		visit(point)
+		previous = point
+	}
+	if offset != len(encoded) {
+		return 0, fmt.Errorf("sample data has trailing bytes")
+	}
+	return int(count), nil
+}
+
+func (samples *SampleSet) trim() (SamplePoint, bool) {
 	if len(samples.points) <= MaxSamplePoints {
-		return
+		return SamplePoint{}, false
 	}
 	// 仅找出最小的 2500 点：最大堆堆顶始终是当前应保留集合中最差的点。
 	// 比较键与 Points/旧版 trim 完全相同；最终输出时才进行稳定排序。
@@ -207,6 +283,7 @@ func (samples *SampleSet) trim() {
 			delete(samples.points, point.EventID)
 		}
 	}
+	return heap[0], true
 }
 
 func siftDownWorst(heap []SamplePoint, parent int) {
