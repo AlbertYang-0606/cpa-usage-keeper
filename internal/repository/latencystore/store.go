@@ -210,7 +210,7 @@ func decodeLatencyRow(row entities.UsageLatencyStat) (decodedRow, error) {
 		return decodedRow{}, fmt.Errorf("decode sample points: %w", err)
 	}
 	// 两个 Sketch 必须覆盖全部样本；真实点允许因 2500 上限少于 SampleCount。
-	if ttftSketch.Count() != uint64(row.SampleCount) || latencySketch.Count() != uint64(row.SampleCount) || int64(len(samplePoints.Points())) > row.SampleCount {
+	if ttftSketch.Count() != uint64(row.SampleCount) || latencySketch.Count() != uint64(row.SampleCount) || int64(samplePoints.Count()) > row.SampleCount {
 		return decodedRow{}, fmt.Errorf("latency payload counts do not match sample_count %d", row.SampleCount)
 	}
 	return decodedRow{TTFTSketch: ttftSketch, LatencySketch: latencySketch, SamplePoints: samplePoints}, nil

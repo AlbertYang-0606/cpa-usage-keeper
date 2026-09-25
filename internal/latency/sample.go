@@ -90,6 +90,14 @@ func (samples *SampleSet) Clone() *SampleSet {
 	return clone
 }
 
+// Count 返回当前保留的真实配对点数，不需要构造排序副本。
+func (samples *SampleSet) Count() int {
+	if samples == nil {
+		return 0
+	}
+	return len(samples.points)
+}
+
 // Points 按 priority、event ID 返回稳定副本。
 func (samples *SampleSet) Points() []SamplePoint {
 	if samples == nil {
@@ -180,10 +188,41 @@ func (samples *SampleSet) trim() {
 	if len(samples.points) <= MaxSamplePoints {
 		return
 	}
-	// Points 已按保留优先级排序，删除尾部即可得到全局最小固定集合。
-	points := samples.Points()
+	// 仅找出最小的 2500 点：最大堆堆顶始终是当前应保留集合中最差的点。
+	// 比较键与 Points/旧版 trim 完全相同；最终输出时才进行稳定排序。
+	points := make([]SamplePoint, 0, len(samples.points))
+	for _, point := range samples.points {
+		points = append(points, point)
+	}
+	heap := points[:MaxSamplePoints]
+	for index := len(heap)/2 - 1; index >= 0; index-- {
+		siftDownWorst(heap, index)
+	}
 	for _, point := range points[MaxSamplePoints:] {
-		delete(samples.points, point.EventID)
+		if samplePointLess(point, heap[0]) {
+			delete(samples.points, heap[0].EventID)
+			heap[0] = point
+			siftDownWorst(heap, 0)
+		} else {
+			delete(samples.points, point.EventID)
+		}
+	}
+}
+
+func siftDownWorst(heap []SamplePoint, parent int) {
+	for {
+		child := parent*2 + 1
+		if child >= len(heap) {
+			return
+		}
+		if right := child + 1; right < len(heap) && samplePointLess(heap[child], heap[right]) {
+			child = right
+		}
+		if !samplePointLess(heap[parent], heap[child]) {
+			return
+		}
+		heap[parent], heap[child] = heap[child], heap[parent]
+		parent = child
 	}
 }
 
