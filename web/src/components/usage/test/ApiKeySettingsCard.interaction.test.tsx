@@ -109,6 +109,19 @@ describe('ApiKeySettingsCard copy action', () => {
     expect(container.querySelector('button[aria-label="Copied"]')).toBeNull()
   })
 
+  it.each([true, false])('restores the current control after legacy copy, success: %s', async (success) => {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async () => { throw new Error('blocked') } },
+    })
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: () => success })
+    await renderCard(vi.fn())
+    const copyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')!
+    await act(async () => { copyButton.focus(); copyButton.click(); await Promise.resolve() })
+    expect(document.activeElement).toBe(copyButton)
+    expect(document.querySelector('textarea')).toBeNull()
+  })
+
   it('keeps the copy action available when both copy paths fail', async () => {
     const writeText = vi.fn(async () => { throw new Error('blocked') })
     const execCommand = vi.fn(() => false)

@@ -90,6 +90,25 @@ describe('UsagePage runtime behavior', () => {
     await act(async () => root.render(<UsagePage />));
   };
 
+  it('preserves Safari menu clicks when native mouse focus falls back to an ancestor', async () => {
+    await render();
+    const trigger = container.querySelector<HTMLButtonElement>('[data-dashboard-page-trigger]')!;
+    await act(async () => trigger.click());
+    const next = container.querySelector<HTMLAnchorElement>('[data-dashboard-page-menu] a[href$="/settings"]')!;
+    await act(async () => {
+      next.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+      next.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      // 按真机日志重放：Safari 未聚焦链接时，焦点会落到可聚焦的祖先；没有祖先则为空。
+      const ancestor = next.parentElement?.closest<HTMLElement>('[tabindex]');
+      if (ancestor) ancestor.focus();
+      else (document.activeElement as HTMLElement).blur();
+    });
+    expect(next.isConnected).toBe(true);
+    await act(async () => next.click());
+    expect(window.location.pathname).toBe('/settings');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
   const openPendingRequestLog = async () => {
     const pending = Promise.withResolvers<UsageEventRequestLogResponse>();
     api.fetchUsageEventRequestLog.mockReturnValue(pending.promise);

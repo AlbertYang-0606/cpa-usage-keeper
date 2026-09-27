@@ -3,11 +3,14 @@ import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CredentialEditModal } from '../CredentialEditModal'
+import { AiProviderCredentialsSection } from '../AiProviderCredentialsSection'
+import { AuthFileCredentialsSection } from '../AuthFileCredentialsSection'
+import { createAiProviderSectionProps, createAuthFileSectionProps } from './credentialSectionFixtures'
 import { ApiError } from '@/lib/api'
 import type { CredentialDetailSelection, CredentialEditChange } from '../credentialViewModels'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
+vi.mock('react-i18next', () => ({ initReactI18next: { type: '3rdParty', init: () => undefined }, useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }))
 const selection = (type = 'codex'): CredentialDetailSelection => ({
   kind: type === 'codex' ? 'auth-file' : 'ai-provider',
   row: { displayName: 'Office', identity: { id: '7', identity: 'idx/one', type, alias: 'Office', priority: 5, disabled: false } },
@@ -135,23 +138,27 @@ describe('credential unified editor', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('focuses the page fallback when saving removes the original row', async () => {
+  it.each(['auth-file', 'ai-provider'])('focuses the local %s filter without toggling it when saving removes the original row', async (kind) => {
     function Harness() {
-      const fallbackRef = useRef<HTMLElement | null>(null)
+      const fallbackRef = useRef<HTMLInputElement | null>(null)
       const [open, setOpen] = useState(false)
       const [visible, setVisible] = useState(true)
-      return <main ref={fallbackRef} tabIndex={-1}>
-        {visible && <button onClick={() => setOpen(true)}>Edit</button>}
+      return <main>
+        {kind === 'auth-file'
+          ? <AuthFileCredentialsSection {...createAuthFileSectionProps()} editFallbackRef={fallbackRef} />
+          : <AiProviderCredentialsSection {...createAiProviderSectionProps()} editFallbackRef={fallbackRef} />}
+        {visible && <button data-test-edit onClick={() => setOpen(true)}>Edit</button>}
         {open && <CredentialEditModal selection={selection()} fallbackFocusRef={fallbackRef} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} onSaveField={async () => { setVisible(false) }} />}
       </main>
     }
     await act(async () => root.render(<Harness />))
-    const trigger = container.querySelector<HTMLButtonElement>('button')!
+    const trigger = container.querySelector<HTMLButtonElement>('[data-test-edit]')!
     await act(async () => { trigger.focus(); trigger.click() })
     await change(field('alias'), 'Updated')
     await act(async () => button('save').click())
     expect(trigger.isConnected).toBe(false)
-    expect(document.activeElement).toBe(container.querySelector('main'))
+    expect(document.activeElement).toBe(container.querySelector('input[type="checkbox"]'))
+    expect((document.activeElement as HTMLInputElement).checked).toBe(false)
   })
 
   it('ignores IME confirmation and saves once on the following ordinary Enter', async () => {
