@@ -148,6 +148,8 @@ func UnmarshalSampleSet(encoded []byte) (*SampleSet, error) {
 }
 
 // QuerySampleMerger 独占查询中的样本集合和持续维护的最差点堆。
+// 跨行冲突检查仅覆盖当前保留的 event ID；已淘汰 ID 不留历史记录。
+// 与同上限的 SampleSet.Merge 一致，这不是对全部历史事件的重复/冲突审计。
 // TakeSamples 后所有权交还调用方，此前不得通过其他路径修改内部集合。
 type QuerySampleMerger struct {
 	samples *SampleSet
@@ -158,7 +160,8 @@ func NewQuerySampleMerger() *QuerySampleMerger {
 	return &QuerySampleMerger{samples: NewSampleSet()}
 }
 
-// MergeBinary 校验完整 BLOB 后才更改集合；未入选的行复用已知截止点。
+// MergeBinary 校验完整 BLOB 的格式及其与当前保留集合的冲突后才更改集合。
+// 未入选的点仍经过格式校验，但已淘汰 ID 的跨行冲突不保证检测。
 func (merger *QuerySampleMerger) MergeBinary(encoded []byte) (int, error) {
 	if merger == nil || merger.samples == nil {
 		return 0, fmt.Errorf("query sample merger is closed")

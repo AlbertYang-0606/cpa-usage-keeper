@@ -98,3 +98,55 @@ func TestQueryMergerChecksOld2500RowTailConflictBeforeChangingState(t *testing.T
 		t.Fatal("failed row changed the prior retained set")
 	}
 }
+
+// A bounded merge validates conflicts against retained IDs, not all historical IDs.
+// Compare with ordinary SampleSet.Merge at the same cap so this boundary cannot
+// accidentally be attributed to the encoded-query cutoff optimization.
+func TestQueryMergerConflictBoundaryMatchesBoundedMerge(t *testing.T) {
+	blob, ordered := legacySampleBlob(2500, false)
+	for _, tc := range []struct {
+		name         string
+		index        int
+		wantConflict bool
+	}{
+		{"retained_best", 0, true},
+		{"retained_cutoff", latency.MaxSamplePoints - 1, true},
+		{"first_discarded", latency.MaxSamplePoints, false},
+		{"legacy_tail", 2499, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := ordered[tc.index]
+			changed.TTFTMS++
+			nextBlob := queryPointsBlob([]latency.SamplePoint{changed})
+			first, err := latency.UnmarshalSampleSet(blob)
+			if err != nil {
+				t.Fatal(err)
+			}
+			next, err := latency.UnmarshalSampleSet(nextBlob)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Before trimming, the full legacy row still detects this conflict.
+			if err := first.Clone().Merge(next); err == nil {
+				t.Fatal("full legacy row failed to detect conflicting event")
+			}
+			ordinary := latency.NewSampleSet()
+			if err := ordinary.Merge(first); err != nil {
+				t.Fatal(err)
+			}
+			query := latency.NewQuerySampleMerger()
+			if _, err := query.MergeBinary(blob); err != nil {
+				t.Fatal(err)
+			}
+			ordinaryErr := ordinary.Merge(next)
+			_, queryErr := query.MergeBinary(nextBlob)
+			if (ordinaryErr != nil) != tc.wantConflict || (queryErr != nil) != tc.wantConflict {
+				t.Fatalf("want conflict=%v; ordinary=%v query=%v", tc.wantConflict, ordinaryErr, queryErr)
+			}
+			got := query.TakeSamples().Points()
+			if !reflect.DeepEqual(got, ordinary.Points()) || !reflect.DeepEqual(got, ordered[:latency.MaxSamplePoints]) {
+				t.Fatal("conflicting retained or discarded event changed selected points")
+			}
+		})
+	}
+}
