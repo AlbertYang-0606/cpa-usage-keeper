@@ -253,9 +253,11 @@ func parseClaudeUsageWindow(object map[string]json.RawMessage) *ClaudeUsageWindo
 	if object == nil {
 		return nil
 	}
+	utilization, hasUtilization := floatValue(object, "utilization")
 	return &ClaudeUsageWindow{
-		Utilization: floatField(object, "utilization"),
-		ResetsAt:    stringField(object, "resets_at", "resetsAt"),
+		Utilization:    utilization,
+		ResetsAt:       stringField(object, "resets_at", "resetsAt"),
+		HasUtilization: hasUtilization && !math.IsNaN(utilization) && !math.IsInf(utilization, 0),
 	}
 }
 

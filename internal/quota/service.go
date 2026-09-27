@@ -208,7 +208,7 @@ func NewServiceWithRegistryAndOptions(db *gorm.DB, registry ProviderRegistry, op
 		codexQuotaHistoryHeartbeatInterval: codexHistoryHeartbeatInterval,
 		codexQuotaHistoryNewTimer:          newCodexQuotaHistoryTimer,
 		codexQuotaHistoryWrite:             repository.WriteCodexMainQuotaObservations,
-		codexQuotaHistoryLoad:              repository.LoadLatestCodexQuotaHistoryState,
+		codexQuotaHistoryLoad:              repository.LoadLatestQuotaHistoryState,
 		codexQuotaHistoryListIdentities:    repository.ListActiveAuthFileUsageIdentitiesByAuthIndexes,
 	}
 	go service.runUsageHeaderSnapshotWorker()
@@ -356,9 +356,12 @@ func (s *Service) check(ctx context.Context, request CheckRequest, beforeSubscri
 		}
 		return CheckResponse{}, false, err
 	}
-	// 主动查询只从原始 CodexResult 提取 Primary/Secondary；Review/Additional 从结构上不参与遍历。
-	if usageHeaderIdentityIsCodex(identity) {
-		observations := BuildCodexMainQuotaObservations(authIndex, providerOutput, time.Now())
+	// 主动查询只从真实 provider 的账号主窗口提取可信观察；其它窗口不参与历史。
+	if provider := normalizeIdentityType(identity.Type); provider == "codex" || provider == "claude" {
+		observations := BuildMainQuotaObservations(authIndex, providerOutput, time.Now())
+		if len(observations) > 0 && observations[0].Provider != provider {
+			observations = nil
+		}
 		if len(observations) > 0 && !s.tryAppendCodexQuotaHistoryObservations(observations, request.Source) {
 			// history 是 best-effort 统计链路，队列满或 shutdown 不能改变手动/定时/巡检刷新结果。
 			logrus.WithFields(logrus.Fields{

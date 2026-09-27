@@ -13,6 +13,7 @@ import (
 
 type codexQuotaHistoryDeleteRequest struct {
 	ctx       context.Context
+	provider  string
 	authIndex string
 	cycleID   int64
 	result    chan error
@@ -37,10 +38,11 @@ func (s *Service) DeleteCodexQuotaHistoryCycle(ctx context.Context, authIndex st
 	if err != nil {
 		return err
 	}
-	if !usageHeaderIdentityIsCodex(identity) {
+	provider := normalizeIdentityType(identity.Type)
+	if provider != "codex" && provider != "claude" {
 		return ErrUnsupportedType
 	}
-	request := codexQuotaHistoryDeleteRequest{ctx: ctx, authIndex: authIndex, cycleID: cycleID, result: make(chan error, 1)}
+	request := codexQuotaHistoryDeleteRequest{ctx: ctx, provider: provider, authIndex: authIndex, cycleID: cycleID, result: make(chan error, 1)}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -61,19 +63,16 @@ func (s *Service) DeleteCodexQuotaHistoryCycle(ctx context.Context, authIndex st
 func (s *Service) deleteCodexQuotaHistoryCycle(state *codexQuotaHistoryRunnerState, request codexQuotaHistoryDeleteRequest) {
 	ctx, cancel := context.WithTimeout(request.ctx, codexQuotaHistoryDatabaseTimeout)
 	defer cancel()
-	cycle, err := repository.DeleteCodexQuotaCycle(ctx, s.db, request.authIndex, request.cycleID)
+	cycle, err := repository.DeleteQuotaCycle(ctx, s.db, request.provider, request.authIndex, request.cycleID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		err = ErrNotFound
 	}
 	if err == nil {
-		role := "primary"
-		if cycle.QuotaKey == "rate_limit.secondary_window" {
-			role = "secondary"
-		}
-		key := codexQuotaHistoryStateKey{AuthIndex: cycle.AuthIndex, WindowRole: role}
+		role, _ := repositorydto.QuotaWindowRole(cycle.Provider, cycle.QuotaKey)
+		key := codexQuotaHistoryStateKey{Provider: cycle.Provider, QuotaKey: cycle.QuotaKey, AuthIndex: cycle.AuthIndex, WindowRole: role}
 		// writer 可能无错误忽略某条观察，因此分别核对内存状态本身的归属。
 		if current, ok := state.Current[key]; ok && current.Found && cycle.MatchesObservation(repositorydto.CodexMainQuotaObservation{
-			AuthIndex: key.AuthIndex, WindowRole: key.WindowRole, WindowSeconds: current.WindowSeconds, ResetAt: current.ResetAt,
+			Provider: key.Provider, QuotaKey: key.QuotaKey, AuthIndex: key.AuthIndex, WindowRole: key.WindowRole, WindowSeconds: current.WindowSeconds, ResetAt: current.ResetAt,
 		}) {
 			delete(state.Current, key)
 		}

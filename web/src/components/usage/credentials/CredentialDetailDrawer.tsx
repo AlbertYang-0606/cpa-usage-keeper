@@ -142,10 +142,11 @@ export function CredentialDetailDrawer({
       setResettingStats(false)
     }
   }
-  const hasCodexQuotaHistory = selection?.kind === 'auth-file' && identity?.type?.trim().toLowerCase() === 'codex'
-  const availableTabs = useMemo<CredentialDetailTab[]>(() => hasCodexQuotaHistory
+  const quotaHistoryProvider = selection?.kind === 'auth-file' ? identity?.type?.trim().toLowerCase() : undefined
+  const hasQuotaHistory = quotaHistoryProvider === 'codex' || quotaHistoryProvider === 'claude'
+  const availableTabs = useMemo<CredentialDetailTab[]>(() => hasQuotaHistory
     ? ['overview', 'quota-history', 'requests', 'errors']
-    : ['overview', 'requests', 'errors'], [hasCodexQuotaHistory])
+    : ['overview', 'requests', 'errors'], [hasQuotaHistory])
 
   const resetRequestEvents = useCallback(() => {
     firstPageControllerRef.current?.abort()
@@ -189,9 +190,9 @@ export function CredentialDetailDrawer({
   }, [open, resetErrorEvents, resetRequestEvents, selectionKey])
 
   useEffect(() => {
-    // 同一个身份在同步后可能改变类型；不再是 Codex 时立即退出专属标签，避免展示不属于当前凭证的数据。
-    if (activeTab === 'quota-history' && !hasCodexQuotaHistory) setActiveTab('overview')
-  }, [activeTab, hasCodexQuotaHistory])
+    // 同一身份同步后可能切换类型；失去历史能力时立即退出标签。
+    if (activeTab === 'quota-history' && !hasQuotaHistory) setActiveTab('overview')
+  }, [activeTab, hasQuotaHistory])
 
   const loadFirstPage = useCallback(async () => {
     if (!open || activeTab !== 'requests' || !sourceFilter) return
@@ -453,7 +454,7 @@ export function CredentialDetailDrawer({
             >
               {t('usage_stats.credentials_detail_overview_tab')}
             </button>
-            {hasCodexQuotaHistory ? (
+            {hasQuotaHistory ? (
               <button
                 ref={quotaHistoryTabRef}
                 id={quotaHistoryTabId}
@@ -575,9 +576,9 @@ export function CredentialDetailDrawer({
             />
           </section>
           </section>
-        ) : activeTab === 'quota-history' && hasCodexQuotaHistory ? (
+        ) : activeTab === 'quota-history' && hasQuotaHistory ? (
           <section id={quotaHistoryPanelId} role="tabpanel" aria-labelledby={quotaHistoryTabId} className={styles.quotaHistoryPanel}>
-            <CodexQuotaHistoryPanel authIndex={sourceFilter} onAuthRequired={onAuthRequired} />
+            <CodexQuotaHistoryPanel key={`${sourceFilter}:${quotaHistoryProvider}`} authIndex={sourceFilter} onAuthRequired={onAuthRequired} />
           </section>
         ) : activeTab === 'requests' ? (
           <section id={requestsPanelId} role="tabpanel" aria-labelledby={requestsTabId} className={styles.requestsPanel}>

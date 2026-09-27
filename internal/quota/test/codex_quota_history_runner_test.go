@@ -1143,7 +1143,7 @@ func TestCodexQuotaHistoryRunnerSkipsRepeatedRecoveryAfterSameBatchFailure(t *te
 	var failRecovery atomic.Bool
 	failRecovery.Store(true)
 	recoveryEntered := make(chan struct{}, 1)
-	setCodexQuotaHistoryLoader(service, func(ctx context.Context, writerDB *gorm.DB, authIndex string, windowRole string) (repositorydto.CodexQuotaHistoryState, error) {
+	setCodexQuotaHistoryLoader(service, func(ctx context.Context, writerDB *gorm.DB, provider string, authIndex string, windowRole string) (repositorydto.CodexQuotaHistoryState, error) {
 		recoveryCalls.Add(1)
 		select {
 		case recoveryEntered <- struct{}{}:
@@ -1152,7 +1152,7 @@ func TestCodexQuotaHistoryRunnerSkipsRepeatedRecoveryAfterSameBatchFailure(t *te
 		if failRecovery.Load() {
 			return repositorydto.CodexQuotaHistoryState{}, errors.New("injected state recovery failure")
 		}
-		return repository.LoadLatestCodexQuotaHistoryState(ctx, writerDB, authIndex, windowRole)
+		return repository.LoadLatestQuotaHistoryState(ctx, writerDB, provider, authIndex, windowRole)
 	})
 
 	base := time.Date(2026, 8, 22, 8, 0, 0, 0, time.UTC)

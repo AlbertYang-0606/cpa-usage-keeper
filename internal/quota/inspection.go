@@ -80,13 +80,13 @@ func (s *Service) StartInspection(ctx context.Context) (InspectionStatus, error)
 	// 记录本轮参与巡检的 auth_index：包含新入队任务和同来源 inspection active 任务，不包含 manual/auto/unsupported。
 	s.setInspectionRoundAuthIndexes(summary.roundAuthIndexes)
 	// 没有新任务时也要返回状态；这可能代表全部 unsupported、或已有任务正在被本轮复用。
-	if len(summary.queuedAuthIndexes) > 0 {
+	if len(summary.queuedTasks) > 0 {
 		// dispatcher 会按全局 worker 限制派发，避免一次巡检把所有 provider 同时打满。
 		if !s.startRefreshGoroutine(func() {
-			s.dispatchRefreshTasks(summary.queuedAuthIndexes)
+			s.dispatchRefreshTasks(summary.queuedTasks)
 		}) {
 			// 应用关闭期间无法启动后台 goroutine 时，queued 任务必须失败，否则前端会一直轮询。
-			s.markQueuedRefreshTasksFailed(summary.queuedAuthIndexes, context.Canceled)
+			s.markQueuedRefreshTasksFailed(summary.queuedTasks, context.Canceled)
 		}
 	}
 	// 立即读一次状态，给前端返回 total/running/unknown 等首屏数据。

@@ -685,7 +685,7 @@ export async function fetchCodexQuotaHistory(
   const query = params.toString()
   const response = await apiFetch(`${apiPath(`/quota/history/${encodeURIComponent(authIndex)}`)}${query ? `?${query}` : ''}`, { signal })
   if (!response.ok) {
-    await parseApiError(response, `Failed to load Codex quota history: ${response.status}`)
+    await parseApiError(response, `Failed to load quota history: ${response.status}`)
   }
   return response.json()
 }
@@ -695,7 +695,7 @@ export async function deleteCodexQuotaHistoryCycle(authIndex: string, cycleId: n
     method: 'DELETE', signal,
   })
   if (!response.ok) {
-    await parseApiError(response, `Failed to delete Codex quota cycle: ${response.status}`)
+    await parseApiError(response, `Failed to delete quota cycle: ${response.status}`)
   }
 }
 
