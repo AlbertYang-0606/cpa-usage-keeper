@@ -201,8 +201,8 @@ func TestProviderMetadataSyncNewSourcesTreatOnlyTyped404AsOptional(t *testing.T)
 		t.Fatalf("Meta provider after empty list = %+v", metaProvider)
 	}
 	xAIOAuth := secondRows[metadataIdentityKey(entities.UsageIdentityAuthTypeAuthFile, "shared-xai-auth")]
-	// provider stale 不能跨 auth_type 删除 OAuth 行。
-	if xAIOAuth.IsDeleted || xAIOAuth.DeletedAt != nil || !xAIOAuth.UpdatedAt.Equal(secondNow) {
+	// provider stale 不能跨 auth_type 删除 OAuth 行；相同 Auth File metadata 不刷新时间。
+	if xAIOAuth.IsDeleted || xAIOAuth.DeletedAt != nil || !xAIOAuth.UpdatedAt.Equal(firstNow) {
 		t.Fatalf("xAI OAuth after provider stale = %+v", xAIOAuth)
 	}
 }
