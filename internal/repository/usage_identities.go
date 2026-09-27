@@ -729,8 +729,10 @@ func normalizeUsageIdentityTypes(identityTypes []string) []string {
 const usageIdentitySyncColumns = "id, name, auth_type_name, identity, type, provider, lookup_key, prefix, base_url, file_name, file_path, priority, disabled, note, account_id, project_id, xai_user_id, active_start, active_until, plan_type, is_deleted, deleted_at"
 
 type usageIdentityUpdate struct {
-	id     int64
-	fields map[string]any
+	id          int64
+	fields      map[string]any
+	oldPriority *int
+	oldDisabled *bool
 }
 
 type usageIdentityChanges struct {
@@ -763,7 +765,7 @@ func prepareUsageIdentitySync(reader *gorm.DB, identities []entities.UsageIdenti
 			fields := usageIdentityMetadataDiff(row, identity)
 			if len(fields) > 0 {
 				fields["updated_at"] = timeutil.FormatStorageTime(now)
-				changes.update = append(changes.update, usageIdentityUpdate{id: row.ID, fields: fields})
+				changes.update = append(changes.update, usageIdentityUpdate{id: row.ID, fields: fields, oldPriority: row.Priority, oldDisabled: row.Disabled})
 			}
 			continue
 		}
@@ -801,7 +803,23 @@ func applyUsageIdentitySync(db *gorm.DB, changes usageIdentityChanges, now time.
 	return db.Transaction(func(tx *gorm.DB) error {
 		// 短事务只提交已判定的变化；更新与恢复仍先于新增和 stale 标记。
 		for _, change := range changes.update {
-			if err := tx.Model(&entities.UsageIdentity{}).Where("id = ?", change.id).Updates(change.fields).Error; err != nil {
+			query := tx.Model(&entities.UsageIdentity{}).Where("id = ?", change.id)
+			// 本地编辑可能发生在 reader 快照之后；只对本轮将写的可编辑字段检查旧值，冲突时整行跳过。
+			if _, changed := change.fields["priority"]; changed {
+				if change.oldPriority == nil {
+					query = query.Where("priority IS NULL")
+				} else {
+					query = query.Where("priority = ?", *change.oldPriority)
+				}
+			}
+			if _, changed := change.fields["disabled"]; changed {
+				if change.oldDisabled == nil {
+					query = query.Where("disabled IS NULL")
+				} else {
+					query = query.Where("disabled = ?", *change.oldDisabled)
+				}
+			}
+			if err := query.Updates(change.fields).Error; err != nil {
 				return fmt.Errorf("update usage identity: %w", err)
 			}
 		}

@@ -186,6 +186,145 @@ func TestMetadataDiffSyncUpdatesOnlyChangedIdentity(t *testing.T) {
 	}
 }
 
+func TestMetadataDiffSyncDoesNotOverwriteLaterCredentialEdit(t *testing.T) {
+	priority := 1
+	otherPriority := 9
+	zeroPriority := 0
+	disabled := true
+	otherDisabled := false
+	for _, tc := range []struct {
+		name            string
+		kind            string
+		changeName      bool
+		wantChangedName bool
+		initialPriority *int
+		initialDisabled *bool
+		priority        *int
+		disabled        *bool
+		editPriority    *int
+		editDisabled    *bool
+		wantPriority    *int
+		wantDisabled    *bool
+	}{
+		{name: "priority_null_old_value", kind: "auth", priority: &priority, editPriority: &otherPriority, wantPriority: &otherPriority},
+		{name: "priority_nonnull_old_value", kind: "provider", initialPriority: &zeroPriority, priority: &priority, editPriority: &otherPriority, wantPriority: &otherPriority},
+		{name: "disabled_null_old_value", kind: "provider", disabled: &disabled, editDisabled: &otherDisabled, wantDisabled: &otherDisabled},
+		{name: "disabled_nonnull_old_value", kind: "auth", changeName: true, initialDisabled: &otherDisabled, disabled: &disabled, editDisabled: &disabled, wantDisabled: &disabled},
+		{name: "both_changed_one_conflict", kind: "auth", changeName: true, priority: &priority, disabled: &disabled, editPriority: &otherPriority, wantPriority: &otherPriority},
+		{name: "both_nonnull_changed_disabled_conflict", kind: "provider", changeName: true, initialPriority: &zeroPriority, initialDisabled: &otherDisabled, priority: &priority, disabled: &disabled, editDisabled: &disabled, wantPriority: &zeroPriority, wantDisabled: &disabled},
+		{name: "unrelated_name_change_still_applies", kind: "auth", changeName: true, wantChangedName: true, editPriority: &otherPriority, wantPriority: &otherPriority},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openTestDatabase(t)
+			ctx := context.Background()
+			authType := entities.UsageIdentityAuthTypeAuthFile
+			if tc.kind == "provider" {
+				authType = entities.UsageIdentityAuthTypeAIProvider
+			}
+			row := metadataDiffIdentity(authType, 0)
+			row.Priority = tc.initialPriority
+			row.Disabled = tc.initialDisabled
+			if err := metadataDiffSync(ctx, db, tc.kind, []entities.UsageIdentity{row}, nil, metadataDiffTestTime); err != nil {
+				t.Fatal(err)
+			}
+			var seeded entities.UsageIdentity
+			if err := db.Where("identity = ?", row.Identity).First(&seeded).Error; err != nil {
+				t.Fatal(err)
+			}
+			row.Priority = tc.priority
+			row.Disabled = tc.disabled
+			if tc.changeName {
+				row.Name = "CPA changed name"
+			}
+			var injected bool
+			var editErr error
+			// reader 查询完成后、metadata writer 开始前插入本地编辑，稳定复现旧快照覆盖。
+			if err := db.Callback().Query().After("gorm:query").Register("test:credential_edit_after_metadata_read", func(tx *gorm.DB) {
+				if injected || tx.Error != nil || tx.Statement.Table != "usage_identities" {
+					return
+				}
+				if _, ok := tx.Statement.Dest.(*[]entities.UsageIdentity); !ok {
+					return
+				}
+				injected = true
+				if tc.editPriority != nil {
+					editErr = repository.UpdateUsageIdentityPriority(ctx, db, authType, row.Identity, *tc.editPriority)
+				} else {
+					editErr = repository.UpdateUsageIdentityDisabled(ctx, db, authType, row.Identity, *tc.editDisabled)
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := metadataDiffSync(ctx, db, tc.kind, []entities.UsageIdentity{row}, nil, metadataDiffTestTime.Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			if !injected || editErr != nil {
+				t.Fatalf("local edit injection: injected=%t err=%v", injected, editErr)
+			}
+			var stored entities.UsageIdentity
+			if err := db.Where("id = ?", seeded.ID).First(&stored).Error; err != nil {
+				t.Fatal(err)
+			}
+			wantName := seeded.Name
+			if tc.wantChangedName {
+				wantName = row.Name
+			}
+			if !optionalIntEqual(stored.Priority, tc.wantPriority) || !optionalBoolEqual(stored.Disabled, tc.wantDisabled) || stored.Name != wantName {
+				t.Fatalf("metadata sync overwrote later edit or partially applied conflicted row: %+v", stored)
+			}
+		})
+	}
+}
+
+func optionalIntEqual(a, b *int) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
+func optionalBoolEqual(a, b *bool) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
+func TestMetadataDiffSyncAppliesPriorityAndDisabledWithoutConflict(t *testing.T) {
+	zeroPriority := 0
+	oldDisabled := false
+	newPriority := 5
+	newDisabled := true
+	for _, tc := range []struct {
+		name            string
+		kind            string
+		initialPriority *int
+		initialDisabled *bool
+	}{
+		{name: "null_old_values", kind: "auth"},
+		{name: "nonnull_old_values", kind: "provider", initialPriority: &zeroPriority, initialDisabled: &oldDisabled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openTestDatabase(t)
+			row := metadataDiffIdentity(entities.UsageIdentityAuthTypeAuthFile, 0)
+			if tc.kind == "provider" {
+				row = metadataDiffIdentity(entities.UsageIdentityAuthTypeAIProvider, 0)
+			}
+			row.Priority = tc.initialPriority
+			row.Disabled = tc.initialDisabled
+			if err := metadataDiffSync(context.Background(), db, tc.kind, []entities.UsageIdentity{row}, nil, metadataDiffTestTime); err != nil {
+				t.Fatal(err)
+			}
+			row.Priority = &newPriority
+			row.Disabled = &newDisabled
+			if err := metadataDiffSync(context.Background(), db, tc.kind, []entities.UsageIdentity{row}, nil, metadataDiffTestTime.Add(time.Hour)); err != nil {
+				t.Fatal(err)
+			}
+			var stored entities.UsageIdentity
+			if err := db.Where("identity = ?", row.Identity).First(&stored).Error; err != nil {
+				t.Fatal(err)
+			}
+			if !optionalIntEqual(stored.Priority, &newPriority) || !optionalBoolEqual(stored.Disabled, &newDisabled) {
+				t.Fatalf("non-conflicting metadata was not applied: %+v", stored)
+			}
+		})
+	}
+}
+
 func TestMetadataDiffSyncPreservesNullableAndDeletionSemantics(t *testing.T) {
 	db := openTestDatabase(t)
 	ctx := context.Background()
