@@ -189,6 +189,8 @@ type AntigravitySubscriptionPayload struct {
 type ClaudeUsageWindow struct {
 	Utilization float64 `json:"utilization,omitempty"`
 	ResetsAt    string  `json:"resetsAt,omitempty"`
+	// 仅历史采样使用；零值 utilization 必须由上游明确给出。
+	HasUtilization bool `json:"-"`
 }
 
 type ClaudeExtraUsage struct {

@@ -33,11 +33,11 @@ func registerQuotaRoutes(router gin.IRoutes, provider QuotaProvider) {
 		if err := provider.DeleteCodexQuotaHistoryCycle(c.Request.Context(), authIndex, cycleID); err != nil {
 			switch {
 			case errors.Is(err, quota.ErrValidation), errors.Is(err, quota.ErrUnsupportedType):
-				c.JSON(http.StatusBadRequest, gin.H{"error": "codex quota cycle delete request is invalid"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "quota cycle delete request is invalid"})
 			case errors.Is(err, quota.ErrNotFound):
 				c.JSON(http.StatusNotFound, gin.H{"error": "quota cycle or auth identity not found"})
 			default:
-				writeInternalError(c, "codex quota cycle deletion failed", err)
+				writeInternalError(c, "quota cycle deletion failed", err)
 			}
 			return
 		}
@@ -64,11 +64,11 @@ func registerQuotaRoutes(router gin.IRoutes, provider QuotaProvider) {
 		if err != nil {
 			switch {
 			case errors.Is(err, quota.ErrValidation), errors.Is(err, quota.ErrUnsupportedType):
-				c.JSON(http.StatusBadRequest, gin.H{"error": "codex quota history request is invalid"})
+				c.JSON(http.StatusBadRequest, gin.H{"error": "quota history request is invalid"})
 			case errors.Is(err, quota.ErrNotFound):
 				c.JSON(http.StatusNotFound, gin.H{"error": "quota auth identity not found"})
 			default:
-				writeInternalError(c, "codex quota history lookup failed", err)
+				writeInternalError(c, "quota history lookup failed", err)
 			}
 			return
 		}

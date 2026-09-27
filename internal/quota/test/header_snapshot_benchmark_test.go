@@ -73,3 +73,46 @@ func BenchmarkTryAppendUsageHeaderSnapshotPointers32(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkBuildUsageHeaderSnapshotClaude(b *testing.B) {
+	input := quota.UsageHeaderSnapshotInput{
+		AuthType: "oauth", AuthIndex: "claude-auth", Provider: "claude",
+		ObservedAt: time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC),
+		Headers: http.Header{
+			"Anthropic-Ratelimit-Unified-5h-Utilization":        {"0.1049"},
+			"Anthropic-Ratelimit-Unified-5h-Reset":              {"1787270400"},
+			"Anthropic-Ratelimit-Unified-7d-Utilization":        {"0.252"},
+			"Anthropic-Ratelimit-Unified-7d-Reset":              {"1787875200"},
+			"Anthropic-Ratelimit-Unified-7d-Sonnet-Utilization": {"0.8"},
+			"Date": {"Thu, 20 Aug 2026 00:00:00 GMT"},
+		},
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if snapshot, ok := quota.BuildUsageHeaderSnapshot(input); !ok || snapshot == nil {
+			b.Fatal("expected Claude snapshot")
+		}
+	}
+}
+
+func BenchmarkBuildUsageHeaderSnapshotMixedProviders(b *testing.B) {
+	headers := http.Header{
+		"Anthropic-Ratelimit-Unified-5h-Utilization": {"0.25"},
+		"Anthropic-Ratelimit-Unified-5h-Reset":       {"1787270400"},
+		"X-Codex-Primary-Used-Percent":               {"25"},
+		"X-Codex-Primary-Window-Minutes":             {"300"},
+		"X-Codex-Primary-Reset-At":                   {"1787270400"},
+	}
+	input := quota.UsageHeaderSnapshotInput{AuthType: "oauth", AuthIndex: "mixed-auth", ObservedAt: time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC), Headers: headers}
+	b.ReportAllocs()
+	for b.Loop() {
+		input.Provider = "codex"
+		if snapshot, ok := quota.BuildUsageHeaderSnapshot(input); !ok || snapshot.Provider != "codex" {
+			b.Fatal("expected Codex snapshot")
+		}
+		input.Provider = "claude"
+		if snapshot, ok := quota.BuildUsageHeaderSnapshot(input); !ok || snapshot.Provider != "claude" {
+			b.Fatal("expected Claude snapshot")
+		}
+	}
+}

@@ -12,16 +12,19 @@ import (
 
 func TestUsageHeaderSnapshotRequiresOAuthIdentity(t *testing.T) {
 	for _, tc := range []struct {
-		name, authType, authIndex string
-		wantSnapshot              bool
+		name, authType, authIndex, provider string
+		wantSnapshot                        bool
 	}{
-		{"oauth", " OAuth ", "auth-1", true},
-		{"api_key", "api_key", "auth-1", false},
-		{"missing_identity", "oauth", "  ", false},
+		{"oauth_codex", " OAuth ", "auth-1", " CoDeX ", true},
+		{"api_key", "api_key", "auth-1", "codex", false},
+		{"missing_identity", "oauth", "  ", "codex", false},
+		{"unknown_provider", "oauth", "auth-1", "unknown", false},
+		{"missing_provider", "oauth", "auth-1", "", false},
+		{"claude_provider_codex_header", "oauth", "auth-1", "claude", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			payload := fmt.Sprintf(`{"request_id":"header-eligibility","auth_type":%q,"auth_index":%q,"provider":"unknown","response_headers":{"X-Codex-Primary-Used-Percent":["5"],"X-Codex-Primary-Window-Minutes":["300"],"X-Codex-Primary-Reset-After-Seconds":["60"]}}`, tc.authType, tc.authIndex)
-			// provider 提示不能代替身份来源判定；有效 OAuth Header 仍需进入快照。
+			payload := fmt.Sprintf(`{"request_id":"header-eligibility","auth_type":%q,"auth_index":%q,"provider":%q,"executor_type":"CodexExecutor","response_headers":{"X-Codex-Primary-Used-Percent":["5"],"X-Codex-Primary-Window-Minutes":["300"],"X-Codex-Primary-Reset-After-Seconds":["60"]}}`, tc.authType, tc.authIndex, tc.provider)
+			// usage 内容照常解码；额度快照需要 OAuth、auth_index 和精确 provider。
 			event, raw, snapshot, err := service.DecodeRedisUsageMessageWithHeaders(payload, time.Now())
 			if err != nil || event.RequestID != "header-eligibility" || string(raw) != payload {
 				t.Fatalf("usage event changed: request=%q err=%v", event.RequestID, err)

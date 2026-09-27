@@ -165,7 +165,7 @@ func setCodexQuotaHistoryWriter(service *quota.Service, writer func(context.Cont
 	}))
 }
 
-func setCodexQuotaHistoryLoader(service *quota.Service, loader func(context.Context, *gorm.DB, string, string) (repositorydto.CodexQuotaHistoryState, error)) {
+func setCodexQuotaHistoryLoader(service *quota.Service, loader func(context.Context, *gorm.DB, string, string, string) (repositorydto.CodexQuotaHistoryState, error)) {
 	// loader 同样是包内命名函数类型，测试通过反射适配回调并精确统计每批恢复次数。
 	field := quotaServiceField(service, "codexQuotaHistoryLoad")
 	field.Set(reflect.MakeFunc(field.Type(), func(arguments []reflect.Value) []reflect.Value {
@@ -174,6 +174,7 @@ func setCodexQuotaHistoryLoader(service *quota.Service, loader func(context.Cont
 			arguments[1].Interface().(*gorm.DB),
 			arguments[2].Interface().(string),
 			arguments[3].Interface().(string),
+			arguments[4].Interface().(string),
 		)
 		results := []reflect.Value{reflect.ValueOf(state), reflect.Zero(field.Type().Out(1))}
 		if err != nil {

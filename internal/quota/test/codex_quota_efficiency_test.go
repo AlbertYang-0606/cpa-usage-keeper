@@ -54,8 +54,8 @@ func TestGetCodexQuotaHistoryRejectsUnsupportedIdentityAndInvalidRole(t *testing
 	})
 	service := newQuotaServiceWithRegistry(t, db, quota.NewProviderRegistry(nil))
 
-	if _, err := service.GetCodexQuotaHistory(context.Background(), quota.CodexQuotaHistoryRequest{AuthIndex: "claude-auth", Now: now}); !errors.Is(err, quota.ErrUnsupportedType) {
-		t.Fatalf("expected unsupported type, got %v", err)
+	if response, err := service.GetCodexQuotaHistory(context.Background(), quota.CodexQuotaHistoryRequest{AuthIndex: "claude-auth", Now: now}); err != nil || len(response.Cycles) != 0 {
+		t.Fatalf("expected Claude Auth File to have accessible empty history, got response=%+v err=%v", response, err)
 	}
 	invalidRole := "additional"
 	if _, err := service.GetCodexQuotaHistory(context.Background(), quota.CodexQuotaHistoryRequest{AuthIndex: "claude-auth", WindowRole: &invalidRole, Now: now}); !errors.Is(err, quota.ErrValidation) {

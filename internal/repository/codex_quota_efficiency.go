@@ -93,6 +93,13 @@ func BuildCodexQuotaEfficiencyHistory(ctx context.Context, db *gorm.DB, query re
 	}
 	// auth_index 必须精确限定 UsageEvent；空值会退化成跨账号全表扫描，因此直接拒绝。
 	query.AuthIndex = strings.TrimSpace(query.AuthIndex)
+	query.Provider = strings.ToLower(strings.TrimSpace(query.Provider))
+	if query.Provider == "" {
+		query.Provider = "codex"
+	}
+	if _, ok := repositorydto.QuotaWindowKey(query.Provider, "primary"); !ok {
+		return result, fmt.Errorf("unsupported quota history provider %q", query.Provider)
+	}
 	if query.AuthIndex == "" {
 		return result, fmt.Errorf("build codex quota efficiency history: auth_index is required")
 	}
@@ -108,7 +115,7 @@ func BuildCodexQuotaEfficiencyHistory(ctx context.Context, db *gorm.DB, query re
 	// 父表时间使用 sortableTime，SQL 参数也必须用固定宽度 UTC 文本才能保持 instant 顺序。
 	var cycles []entities.QuotaCycle
 	err := db.WithContext(ctx).Clauses(dbresolver.Read).
-		Where("provider = ? AND auth_index = ? AND reset_at >= ? AND window_started_at < ?", codexQuotaProvider, query.AuthIndex, timeutil.FormatSortableStorageTime(query.RangeStart), timeutil.FormatSortableStorageTime(query.Now)).
+		Where("provider = ? AND auth_index = ? AND reset_at >= ? AND window_started_at < ?", query.Provider, query.AuthIndex, timeutil.FormatSortableStorageTime(query.RangeStart), timeutil.FormatSortableStorageTime(query.Now)).
 		Order("reset_at DESC, id DESC").
 		Find(&cycles).Error
 	if err != nil {
@@ -119,7 +126,7 @@ func BuildCodexQuotaEfficiencyHistory(ctx context.Context, db *gorm.DB, query re
 	}
 
 	// 一次父表结果同时生成窗口选项，避免切换器为同一批数据再执行一条 distinct 查询。
-	result.Windows = buildCodexQuotaEfficiencyWindows(cycles, query.Now)
+	result.Windows = buildQuotaEfficiencyWindows(cycles, query.Provider, query.Now)
 	selected := selectCodexQuotaEfficiencyWindow(result.Windows, query.WindowRole)
 	if selected == nil {
 		return result, nil
@@ -131,7 +138,7 @@ func BuildCodexQuotaEfficiencyHistory(ctx context.Context, db *gorm.DB, query re
 	selectedCycles := make([]entities.QuotaCycle, 0, len(cycles))
 	cycleIDs := make([]int64, 0, len(cycles))
 	for _, cycle := range cycles {
-		windowRole, ok := codexWindowRoleFromQuotaKey(cycle.QuotaKey)
+		windowRole, ok := repositorydto.QuotaWindowRole(query.Provider, cycle.QuotaKey)
 		if !ok || windowRole != selected.WindowRole {
 			continue
 		}
@@ -268,10 +275,14 @@ func quotaCyclePercentSummary(segments []entities.QuotaPercentSegment) (*int, *i
 }
 
 func buildCodexQuotaEfficiencyWindows(cycles []entities.QuotaCycle, now time.Time) []repositorydto.CodexQuotaEfficiencyWindow {
+	return buildQuotaEfficiencyWindows(cycles, "codex", now)
+}
+
+func buildQuotaEfficiencyWindows(cycles []entities.QuotaCycle, provider string, now time.Time) []repositorydto.CodexQuotaEfficiencyWindow {
 	// 上游角色是稳定窗口身份；每个角色只保留最近一次观察到的周期长度作为选择器标题。
 	latestCycleByRole := make(map[string]entities.QuotaCycle, 2)
 	for _, cycle := range cycles {
-		role, ok := codexWindowRoleFromQuotaKey(cycle.QuotaKey)
+		role, ok := repositorydto.QuotaWindowRole(provider, cycle.QuotaKey)
 		if !ok {
 			continue
 		}
