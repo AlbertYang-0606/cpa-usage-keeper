@@ -1095,10 +1095,7 @@ function LatencyDiagnosticsCard({ diagnostics, loading, error, isDark, isMobile 
             </div>
             <div>
               <dt>{t('usage_stats.analysis_latency_samples_count')}</dt>
-              <dd>
-                {formatCompactNumber(safeDiagnostics.total_points)}
-                {safeDiagnostics.sampled ? <small>{t('usage_stats.analysis_latency_sampled')}</small> : null}
-              </dd>
+              <dd>{formatCompactNumber(safeDiagnostics.total_points)}</dd>
             </div>
           </dl>
           <div className={styles.analysisChartSurface}>
