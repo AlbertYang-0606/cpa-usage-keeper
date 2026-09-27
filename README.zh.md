@@ -29,50 +29,70 @@ CPA Usage Keeper 是面向 [CLIProxyAPI（CPA）](https://github.com/router-for-
 
 ## 界面预览
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/overview-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/overview-light.png" />
-    <img src="./assets/screenshots/overview-light.png" alt="CPA Usage Keeper 总览" width="49%" />
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/analysis-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/analysis-light.png" />
-    <img src="./assets/screenshots/analysis-light.png" alt="CPA Usage Keeper 分析" width="49%" />
-  </picture>
-</p>
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/auth-files-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/auth-files-light.png" />
-    <img src="./assets/screenshots/auth-files-light.png" alt="CPA Usage Keeper Auth Files" width="49%" />
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/ai-provider-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/ai-provider-light.png" />
-    <img src="./assets/screenshots/ai-provider-light.png" alt="CPA Usage Keeper AI Provider" width="49%" />
-  </picture>
-</p>
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/ranking-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/ranking-light.png" />
-    <img src="./assets/screenshots/ranking-light.png" alt="CPA Usage Keeper 排名" width="49%" />
-  </picture>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light.png" />
-    <img src="./assets/screenshots/login-light.png" alt="CPA Usage Keeper 登录页" width="49%" />
-  </picture>
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <strong>总览</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/overview-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/overview-white.png" />
+        <img src="./assets/screenshots/overview-white.png" alt="CPA Usage Keeper 总览" width="100%" />
+      </picture>
+    </td>
+    <td width="50%" align="center">
+      <strong>实时诊断</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/realtime-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/realtime-white.png" />
+        <img src="./assets/screenshots/realtime-white.png" alt="CPA Usage Keeper 实时诊断" width="100%" />
+      </picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <strong>用量分析</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/analysis-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/analysis-white.png" />
+        <img src="./assets/screenshots/analysis-white.png" alt="CPA Usage Keeper 用量分析" width="100%" />
+      </picture>
+    </td>
+    <td width="50%" align="center">
+      <strong>请求事件</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/request-events-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/request-events-white.png" />
+        <img src="./assets/screenshots/request-events-white.png" alt="CPA Usage Keeper 请求事件" width="100%" />
+      </picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <strong>凭证与限额</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/credentials-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/credentials-white.png" />
+        <img src="./assets/screenshots/credentials-white.png" alt="CPA Usage Keeper 凭证与限额" width="100%" />
+      </picture>
+    </td>
+    <td width="50%" align="center">
+      <strong>限额历史</strong>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/quota-history-dark.png" />
+        <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/quota-history-white.png" />
+        <img src="./assets/screenshots/quota-history-white.png" alt="CPA Usage Keeper 限额历史" width="100%" />
+      </picture>
+    </td>
+  </tr>
+</table>
 
 ## 功能特性
 
 - 将 CPA 用量持久保存到 SQLite，并支持可选的定时备份
 - 统计请求量、Token、成本、缓存、成功率、RPM/TPM 和延迟，并可按时间、模型、API Key、来源及结果筛选
 - 查看和导出请求级事件，并自定义表格列
-- 分析用量趋势、成本构成、模型/API Key/AI Provider 占比、时段热力图和延迟诊断
-- 监控 Auth Files 与 AI Providers 的用量、健康状态和限额，支持健康巡检与限额刷新
+- 分析用量趋势、成本构成、模型/API Key/AI Provider 占比、时段热力图，并通过实时 TTFT/延迟散点图诊断请求表现
+- 监控 Auth Files 与 AI Providers 的用量、健康状态和限额，支持健康巡检、限额刷新、凭证优先级编辑和 Codex 限额历史
 - 可选择加入社区排名，按综合得分、Token、请求量、缓存率、平均 TTFT/延迟或峰值 TPM/RPM 对比表现
 - 为单个 CPA API Key 提供独立的只读用量视图
 - 自动同步 CPA Auth Files、API Keys 和 AI Providers，并维护模型价格用于成本估算
@@ -95,8 +115,8 @@ Docker Compose 是推荐部署方式：首次部署可同时运行 CPA + Keeper�
 
 | 场景 | 推荐方式 | 架构 |
 | --- | --- | --- |
-| 首次部署 CPA + Keeper | [Docker Compose：CPA + Keeper](#docker-compose推荐) | `linux/amd64`、`linux/arm64` |
-| 已有 CPA | [Docker Compose：仅 Keeper](#docker-compose推荐) | `linux/amd64`、`linux/arm64` |
+| 首次部署 CPA + Keeper | [Docker Compose：CPA + Keeper](#cpa--keeper) | `linux/amd64`、`linux/arm64` |
+| 已有 CPA | [Docker Compose：仅 Keeper](#keeper-only) | `linux/amd64`、`linux/arm64` |
 | 已有 CPA，偏好 Docker CLI | [Docker](#dockercpa-已在宿主机运行) | `linux/amd64`、`linux/arm64` |
 | macOS | [Homebrew](#macos-homebrew) | `amd64`、`arm64` |
 | Linux 不使用容器 | [Linux 二进制](#linux-二进制) | `amd64`、`arm64` |
@@ -136,7 +156,7 @@ web/                     React + TypeScript 前端
 
 ### 本地运行
 
-1. 将 `.env.example` 复制为 `.env`，至少设置 `CPA_BASE_URL` 和 `CPA_MANAGEMENT_KEY`。
+1. 将 `.env.example` 复制为 `.env`，至少设置 `CPA_BASE_URL`、`CPA_MANAGEMENT_KEY` 和私有的 `LOGIN_PASSWORD`。
 
 ```bash
 cp .env.example .env
@@ -178,13 +198,36 @@ npm --prefix ./web run build
 
 ## 部署方式
 
+启动后访问 `http://服务器地址:8080`（本机部署可用 `http://127.0.0.1:8080`），使用配置的 Keeper 登录密码登录。修改端口或配置 HTTPS、子路径时，请使用对应地址。
+
 ### Docker Compose（推荐）
 
 Docker Compose 同时推荐用于 CPA + Keeper 联合部署和 Keeper 单独部署。
 
 #### CPA + Keeper
 
-将下面内容保存为 `docker-compose.yml`，并替换管理密钥和登录密码：
+先在部署目录中从 [CPA 官方仓库](https://github.com/router-for-me/CLIProxyAPI) 下载配置示例，保存为 `./cpa/config.yaml`：
+
+```bash
+mkdir -p cpa/auths cpa/logs keeper
+curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config.example.yaml \
+  -o cpa/config.yaml
+```
+
+以上下载命令用于首次部署；已有配置时请直接编辑，避免覆盖。
+
+编辑 `cpa/config.yaml` 中的已有配置项，保留 YAML 缩进：
+
+| 配置项 | 设置说明 |
+| --- | --- |
+| `remote-management.allow-remote` | 改为 `true`，允许 Keeper 从另一个容器访问 CPA 管理功能。 |
+| `remote-management.secret-key` | 设置私有的管理密钥，并在下方 `CPA_MANAGEMENT_KEY` 中填写同一个原始密钥。 |
+| `usage-statistics-enabled` | 改为 `true`，开启使用统计。 |
+| `api-keys` | 将示例密钥替换为自己的客户端调用密钥；这不是 CPA 管理密钥或 Keeper 登录密码。 |
+
+保留默认的 `host: ""`、`port: 8317` 和 `auth-dir: "~/.cli-proxy-api"`，以匹配下面的容器网络及目录挂载。
+
+在同一部署目录中，将下面内容保存为 `docker-compose.yml`，并替换 `CPA_MANAGEMENT_KEY`：
 
 ```yaml
 services:
@@ -231,17 +274,22 @@ networks:
 
 运行 `docker compose up -d` 启动，使用 `docker compose down` 停止。
 
+首次部署还需在 CPA 中添加模型凭证，调用模型后才会产生使用记录。
+
 CPA 数据保存在 `./cpa`，Keeper 数据保存在 `./keeper`。
 
 #### Keeper Only
 
-CPA 已经部署好时，直接使用仓库中的 Keeper-only Compose 模板：
+CPA 已经部署好时，在新的部署目录中下载 Keeper-only Compose 模板和环境配置：
 
 ```bash
-cp deploy/docker-compose.example.yml docker-compose.yml
-cp .env.example .env
+curl -fL https://raw.githubusercontent.com/Willxup/cpa-usage-keeper/main/deploy/docker-compose.example.yml \
+  -o docker-compose.yml
+curl -fL https://raw.githubusercontent.com/Willxup/cpa-usage-keeper/main/.env.example -o .env
 vim .env
 ```
+
+已有部署请直接编辑现有文件，避免覆盖配置。
 
 CPA 运行在 Docker 宿主机上时，可从以下配置开始：
 
@@ -254,11 +302,24 @@ LOGIN_PASSWORD=
 
 启动容器前请设置私有的 `LOGIN_PASSWORD`。
 
-其它网络环境请将 `CPA_BASE_URL` 改为容器可访问的 CPA 地址。CPA 使用非默认 Redis/RESP 地址时，再设置 `REDIS_QUEUE_ADDR`。
+其它网络环境请将 `CPA_BASE_URL` 改为容器可访问的 CPA 地址，并确认 CPA 允许远程管理。只有 Redis/RESP 地址与自动推导的地址不同时，才需要设置 `REDIS_QUEUE_ADDR`。
 
 运行 `docker compose up -d` 启动 Keeper，使用 `docker compose down` 停止。
 
 模板默认将 Keeper 数据保存在 `./data`。
+
+两种 Compose 部署均可在部署目录中查看 Keeper 日志：
+
+```bash
+docker compose logs --tail=100 -f cpa-usage-keeper
+```
+
+更新 Keeper 时，保留配置和数据目录，执行：
+
+```bash
+docker compose pull cpa-usage-keeper
+docker compose up -d cpa-usage-keeper
+```
 
 ### Docker（CPA 已在宿主机运行）
 
@@ -336,6 +397,7 @@ sudo systemctl restart cpa-usage-keeper
 二进制支持以下可选启动参数：
 
 ```bash
+cpa-usage-keeper --env /path/to/keeper.env # 指定环境配置文件。
 cpa-usage-keeper --host 127.0.0.1 # 仅为当前进程覆盖 APP_HOST。
 cpa-usage-keeper -v               # 输出构建版本并退出；也支持 --version。
 ```
@@ -360,7 +422,7 @@ notepad .env
 cp .env.example .env
 ```
 
-新手部署时优先看“最小必填”和“Web 访问与反代”两组，其它配置保持默认即可。
+新手部署时优先看“最小必填”“登录保护”和“Web 访问与反代”三组，其它配置保持默认即可。
 
 ### 最小必填
 
@@ -394,6 +456,7 @@ cp .env.example .env
 | --- | --- | --- | --- |
 | `AUTH_ENABLED` | 否 | `true` | 是否启用登录保护 |
 | `LOGIN_PASSWORD` | 鉴权启用时必填 | - | 登录密码 |
+| `CPA_REQUEST_LOG_ACCESS_ENABLED` | 否 | `false` | 允许管理员通过 Keeper 查看和下载 CPA 请求日志；需要 CPA 中存在对应日志，内容可能包含请求或响应数据 |
 | `AUTH_SESSION_TTL` | 否 | `168h` | 登录 session 有效时长 |
 | `API_KEY_VIEWER_LOCAL_RANKING_ENABLED` | 否 | `false` | 允许 API Key 登录用户只读查看本地排行；Community 排行始终只读 |
 
@@ -418,7 +481,7 @@ Auth Files 定时限额刷新在 Auth Files 巡检弹窗的小齿轮中配置。
 
 | 变量 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `REDIS_QUEUE_ADDR` | 否 | `CPA_BASE_URL` 主机名 + `8317` | CPA Redis/RESP TCP 地址；一般保持空即可。非默认端口或单独暴露 Redis stream 时填写 `host:port` |
+| `REDIS_QUEUE_ADDR` | 否 | 从 `CPA_BASE_URL` 推导 | 显式设置时优先使用该地址；留空时沿用 `CPA_BASE_URL` 的主机和显式端口，未指定端口时使用 `8317`。独立地址填写 `host:port` |
 | `REDIS_QUEUE_TLS` | 否 | `false` | 是否使用 TLS 连接 Redis 队列；显式设置 `REDIS_QUEUE_ADDR` 且需要 TLS 时设为 `true` |
 | `REDIS_QUEUE_BATCH_SIZE` | 否 | `10000` | 每次最多拉取的队列记录数 |
 | `REDIS_QUEUE_IDLE_INTERVAL` | 否 | `1s` | 队列为空时的检查间隔 |
@@ -435,7 +498,7 @@ Auth Files 定时限额刷新在 Auth Files 巡检弹窗的小齿轮中配置。
 | `BACKUP_INTERVAL` | 否 | `24h` | 数据库备份间隔 |
 | `BACKUP_RETENTION_DAYS` | 否 | `7` | 备份保留天数 |
 
-Keeper 会在每天 04:30 的维护窗口中，把早于 90 个本地自然日的原始 `usage_events` 自动移动到永久保留的 `usage_events_archive` 冷表。该冷表用于未来 schema migration 重建增量数据，正常仪表盘 API 不查询 archive。
+Keeper 每天按配置时区在 04:30 自动归档超过 90 个本地自然日的原始请求记录。归档数据永久保留，但常规页面不直接查询这些原始明细；历史汇总统计仍保留。
 
 启用文件日志后，`cpa-usage-keeper-YYYY-MM-DD.log` 会记录所有已输出级别；error、fatal 和 panic 级别还会同时写入 `cpa-usage-keeper-error-YYYY-MM-DD.log`，该文件固定保留历史 30 个本地自然日及当天。
 
