@@ -50,3 +50,28 @@ func TestQuotaHistoryProviderKeyIsolationAcrossWriteReadAndDelete(t *testing.T) 
 		t.Fatalf("Claude deletion touched Codex cycle: %+v", cycles)
 	}
 }
+
+func TestQuotaHistoryUsageIsolatedByProvider(t *testing.T) {
+	db := openTestDatabase(t)
+	now := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	for _, provider := range []string{"codex", "claude"} {
+		observation := codexQuotaHistoryObservation("shared-auth", "primary", 18000, now.Add(time.Hour), 75, now.Add(-time.Hour))
+		observation.Provider = provider
+		observation.QuotaKey, _ = repositorydto.QuotaWindowKey(provider, "primary")
+		if err := repository.WriteCodexMainQuotaObservations(context.Background(), db, []repositorydto.CodexMainQuotaObservation{observation}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i, provider := range []string{"codex", "claude"} {
+		event := usageEventForQuotaEfficiency(provider, "oauth", "shared-auth", now.Add(-30*time.Minute), int64(i+1)*1000000)
+		event.Provider = provider
+		seedCodexQuotaEfficiencyUsage(t, db, event)
+	}
+	for i, provider := range []string{"codex", "claude"} {
+		result, err := repository.BuildCodexQuotaEfficiencyHistory(context.Background(), db, repositorydto.CodexQuotaEfficiencyQuery{Provider: provider, AuthIndex: "shared-auth", Now: now, RangeStart: now.Add(-24 * time.Hour)}, codexQuotaEfficiencyPricingResolver(t))
+		if err != nil || len(result.Cycles) != 1 {
+			t.Fatalf("%s: %+v %v", provider, result, err)
+		}
+		assertCodexQuotaEfficiencyUsage(t, result.Cycles[0].Usage, int64(i+1)*1000000, float64(i+1), true)
+	}
+}

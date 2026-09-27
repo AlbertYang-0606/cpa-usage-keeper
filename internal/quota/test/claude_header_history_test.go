@@ -213,34 +213,38 @@ func TestClaudeDeleteClearsOnlyMatchingQueuedWindow(t *testing.T) {
 }
 
 func TestClaudeHeaderDoesNotMergeOldCodexCacheAfterIdentityTypeChanges(t *testing.T) {
-	db := openQuotaTestDatabase(t)
-	seedUsageIdentity(t, db, entities.UsageIdentity{Identity: "shared-auth", Provider: "claude", Type: "claude", AuthType: entities.UsageIdentityAuthTypeAuthFile})
-	service := quota.NewServiceWithRegistry(db, quota.NewProviderRegistry(nil), emptyPricingCatalogForTest())
-	defer service.StopRefreshTasks()
-	now := time.Now().Truncate(time.Second)
-	credits := 2
-	oldUsed := 90.0
-	refreshTasks(service)["shared-auth"] = &quota.RefreshTaskRecord{
-		AuthIndex: "shared-auth", Type: "codex", Status: quota.RefreshTaskStatusCompleted, RefreshedAt: now.Add(time.Minute),
-		Quota: &quota.CheckResponse{
-			ID: "shared-auth", RateLimitResetCreditsAvailableCount: &credits,
-			Subscription: &quota.SubscriptionInfo{Provider: "codex", Plan: "plus"},
-			Quota:        []quota.QuotaRow{{Key: "rate_limit.primary_window", UsedPercent: &oldUsed}},
-		},
-	}
-	snapshot, ok := quota.BuildUsageHeaderSnapshot(quota.UsageHeaderSnapshotInput{
-		AuthType: "oauth", AuthIndex: "shared-auth", Provider: "claude", ObservedAt: now,
-		Headers: http.Header{
-			"Anthropic-Ratelimit-Unified-5h-Utilization": {"0.25"},
-			"Anthropic-Ratelimit-Unified-5h-Reset":       {strconv.FormatInt(now.Add(5*time.Hour).Unix(), 10)},
-		},
-	})
-	if !ok || !applyUsageHeaderSnapshot(service, context.Background(), *snapshot) {
-		t.Fatal("expected valid Claude cache update")
-	}
-	updated := refreshTaskRecord(service, "shared-auth")
-	if updated == nil || updated.Type != "claude" || updated.Quota == nil || len(updated.Quota.Quota) != 1 || updated.Quota.Quota[0].Key != "five_hour" || updated.Quota.Subscription != nil || updated.Quota.RateLimitResetCreditsAvailableCount != nil {
-		t.Fatalf("old Codex cache leaked into Claude cache: %+v", updated)
+	for _, status := range []quota.RefreshTaskStatus{quota.RefreshTaskStatusCompleted, quota.RefreshTaskStatusQueued, quota.RefreshTaskStatusRunning} {
+		t.Run(string(status), func(t *testing.T) {
+			db := openQuotaTestDatabase(t)
+			seedUsageIdentity(t, db, entities.UsageIdentity{Identity: "shared-auth", Provider: "claude", Type: "claude", AuthType: entities.UsageIdentityAuthTypeAuthFile})
+			service := quota.NewServiceWithRegistry(db, quota.NewProviderRegistry(nil), emptyPricingCatalogForTest())
+			defer service.StopRefreshTasks()
+			now := time.Now().Truncate(time.Second)
+			credits := 2
+			oldUsed := 90.0
+			refreshTasks(service)["shared-auth"] = &quota.RefreshTaskRecord{
+				AuthIndex: "shared-auth", Type: "codex", Status: status, RefreshedAt: now.Add(time.Minute),
+				Quota: &quota.CheckResponse{
+					ID: "shared-auth", RateLimitResetCreditsAvailableCount: &credits,
+					Subscription: &quota.SubscriptionInfo{Provider: "codex", Plan: "plus"},
+					Quota:        []quota.QuotaRow{{Key: "rate_limit.primary_window", UsedPercent: &oldUsed}},
+				},
+			}
+			snapshot, ok := quota.BuildUsageHeaderSnapshot(quota.UsageHeaderSnapshotInput{
+				AuthType: "oauth", AuthIndex: "shared-auth", Provider: "claude", ObservedAt: now,
+				Headers: http.Header{
+					"Anthropic-Ratelimit-Unified-5h-Utilization": {"0.25"},
+					"Anthropic-Ratelimit-Unified-5h-Reset":       {strconv.FormatInt(now.Add(5*time.Hour).Unix(), 10)},
+				},
+			})
+			if !ok || !applyUsageHeaderSnapshot(service, context.Background(), *snapshot) {
+				t.Fatal("expected valid Claude cache update")
+			}
+			updated := refreshTaskRecord(service, "shared-auth")
+			if updated == nil || updated.Type != "claude" || updated.Quota == nil || len(updated.Quota.Quota) != 1 || updated.Quota.Quota[0].Key != "five_hour" || updated.Quota.Subscription != nil || updated.Quota.RateLimitResetCreditsAvailableCount != nil {
+				t.Fatalf("old Codex cache leaked into Claude cache: %+v", updated)
+			}
+		})
 	}
 }
 

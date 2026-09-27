@@ -154,18 +154,22 @@ func TestApplyUsageHeaderSnapshotIgnoresProviderOnlyCodexWhenIdentityTypeDiffers
 }
 
 func TestApplyUsageHeaderSnapshotSkipsActiveRefreshTask(t *testing.T) {
-	db := openQuotaTestDatabase(t)
-	seedUsageIdentity(t, db, entities.UsageIdentity{Identity: "codex-auth", Provider: "codex", Type: "codex", AuthType: entities.UsageIdentityAuthTypeAuthFile})
-	service := NewServiceWithRegistry(db, NewProviderRegistry(nil), emptyPricingCatalogForTest())
-	defer service.StopRefreshTasks()
-	refreshTasks(service)["codex-auth"] = &RefreshTaskRecord{AuthIndex: "codex-auth", Status: RefreshTaskStatusQueued, Source: RefreshSourceManual}
+	for _, status := range []RefreshTaskStatus{RefreshTaskStatusQueued, RefreshTaskStatusRunning} {
+		t.Run(string(status), func(t *testing.T) {
+			db := openQuotaTestDatabase(t)
+			seedUsageIdentity(t, db, entities.UsageIdentity{Identity: "codex-auth", Provider: "codex", Type: "codex", AuthType: entities.UsageIdentityAuthTypeAuthFile})
+			service := NewServiceWithRegistry(db, NewProviderRegistry(nil), emptyPricingCatalogForTest())
+			defer service.StopRefreshTasks()
+			refreshTasks(service)["codex-auth"] = &RefreshTaskRecord{AuthIndex: "codex-auth", Type: "codex", Status: status, Source: RefreshSourceManual}
 
-	applied := applyUsageHeaderSnapshot(service, context.Background(), codexUsageHeaderSnapshot("codex-auth", time.Date(2026, 6, 22, 11, 0, 0, 0, time.Local), "4"))
-	if applied {
-		t.Fatal("expected active refresh task to win over header snapshot")
-	}
-	if task := refreshTasks(service)["codex-auth"]; task.Status != RefreshTaskStatusQueued || task.Quota != nil {
-		t.Fatalf("expected queued task to remain unchanged, got %+v", task)
+			applied := applyUsageHeaderSnapshot(service, context.Background(), codexUsageHeaderSnapshot("codex-auth", time.Date(2026, 6, 22, 11, 0, 0, 0, time.Local), "4"))
+			if applied {
+				t.Fatal("expected active refresh task to win over header snapshot")
+			}
+			if task := refreshTasks(service)["codex-auth"]; task.Status != status || task.Quota != nil {
+				t.Fatalf("expected queued task to remain unchanged, got %+v", task)
+			}
+		})
 	}
 }
 

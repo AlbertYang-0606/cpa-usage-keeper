@@ -704,8 +704,8 @@ func (s *Service) shouldProcessUsageHeaderQuotaSnapshot(authIndex string, identi
 	if !ok {
 		return true
 	}
-	// 手动/自动刷新正在 queued/running 时，以主动刷新为准，header snapshot 不抢写。
-	if existing.isActive() {
+	// 同类型主动任务优先；类型已切换时，旧任务不能阻挡新 Header。
+	if existing.isActive() && normalizeIdentityType(existing.Type) == normalizeIdentityType(identityType) {
 		return false
 	}
 	// 已有 completed cache 时间不早于当前 header 时，跳过旧 snapshot。
@@ -726,8 +726,8 @@ func (s *Service) mergeUsageHeaderQuotaCache(authIndex string, response CheckRes
 	var upstreamResponses []UpstreamResponse
 	// 有旧记录时先确认当前 header 仍然有资格写入。
 	if ok {
-		// active 任务可能在前置检查后出现，二次检查避免竞态覆盖。
-		if existing.isActive() {
+		// 同类型 active 任务可能在前置检查后出现，二次检查避免竞态覆盖。
+		if existing.isActive() && normalizeIdentityType(existing.Type) == normalizeIdentityType(identity.Type) {
 			return false
 		}
 		// completed cache 可能在前置检查后更新，二次检查避免旧 header 回写。

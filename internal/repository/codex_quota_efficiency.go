@@ -214,7 +214,7 @@ func BuildCodexQuotaEfficiencyHistory(ctx context.Context, db *gorm.DB, query re
 	}
 
 	// 单次有序流只从 SQLite 逐行读取必需字段；Go 线性归类后仅保留少量 pricing 分组。
-	if err := streamCodexQuotaEfficiencyUsage(ctx, db, query.AuthIndex, works, costResolver, false); err != nil {
+	if err := streamCodexQuotaEfficiencyUsage(ctx, db, query.Provider, query.AuthIndex, works, costResolver, false); err != nil {
 		return result, err
 	}
 	// 流式聚合结束后再计算每百分点值，保证 CostAvailable 已吸收所有 pricing 分组。
@@ -409,7 +409,7 @@ func buildCodexQuotaEfficiencyTransitions(segments []entities.QuotaPercentSegmen
 	return transitions
 }
 
-func streamCodexQuotaEfficiencyUsage(ctx context.Context, db *gorm.DB, authIndex string, works []codexQuotaEfficiencyCycleWork, costResolver pricing.Resolver, keepAllPricingFields bool) error {
+func streamCodexQuotaEfficiencyUsage(ctx context.Context, db *gorm.DB, provider string, authIndex string, works []codexQuotaEfficiencyCycleWork, costResolver pricing.Resolver, keepAllPricingFields bool) error {
 	if len(works) == 0 {
 		return nil
 	}
@@ -434,15 +434,16 @@ func streamCodexQuotaEfficiencyUsage(ctx context.Context, db *gorm.DB, authIndex
 		}
 	}
 
+	// 同一 auth_index 热更新后可能换 provider，事件统计与额度周期必须同源。
 	// SQLite 只做索引范围扫描和时间排序；Rows 迭代器避免把整个月的事件装入 Go 切片。
 	rows, err := db.WithContext(ctx).Clauses(dbresolver.Read).Raw(`SELECT
 		`+codexQuotaEfficiencyPricingProjection(costResolver.ActiveFields(), keepAllPricingFields)+`,
 		timestamp, COALESCE(failed, 0), COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(reasoning_tokens, 0),
 		cache_read_tokens, cache_creation_tokens, COALESCE(total_tokens, 0)
 	FROM usage_events INDEXED BY idx_usage_events_auth_index_timestamp_id
-	WHERE auth_type = ? AND auth_index = ? AND timestamp >= ? AND timestamp < ?
+	WHERE auth_type = ? AND auth_index = ? AND provider = ? AND timestamp >= ? AND timestamp < ?
 	ORDER BY timestamp ASC, id ASC`,
-		"oauth", authIndex, timeutil.FormatStorageTime(globalStart), timeutil.FormatStorageTime(globalEnd)).Rows()
+		"oauth", authIndex, provider, timeutil.FormatStorageTime(globalStart), timeutil.FormatStorageTime(globalEnd)).Rows()
 	if err != nil {
 		return fmt.Errorf("stream codex quota efficiency usage: %w", err)
 	}
@@ -498,7 +499,7 @@ func streamCodexQuotaEfficiencyUsage(ctx context.Context, db *gorm.DB, authIndex
 					work.record.Transitions[index].Usage = repositorydto.CodexQuotaEfficiencyUsage{CostAvailable: true}
 				}
 			}
-			return streamCodexQuotaEfficiencyUsage(ctx, db, authIndex, works, costResolver, true)
+			return streamCodexQuotaEfficiencyUsage(ctx, db, provider, authIndex, works, costResolver, true)
 		}
 
 		transitions := work.record.Transitions

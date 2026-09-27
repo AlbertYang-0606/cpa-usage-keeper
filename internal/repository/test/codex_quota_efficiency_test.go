@@ -417,6 +417,7 @@ func seedCodexQuotaEfficiencyRoleCycle(t testing.TB, db *gorm.DB, authIndex stri
 func usageEventForQuotaEfficiency(key, authType, authIndex string, timestamp time.Time, inputTokens int64) entities.UsageEvent {
 	return entities.UsageEvent{
 		EventKey:    key,
+		Provider:    "codex",
 		Model:       "priced-model",
 		AuthType:    authType,
 		AuthIndex:   authIndex,
