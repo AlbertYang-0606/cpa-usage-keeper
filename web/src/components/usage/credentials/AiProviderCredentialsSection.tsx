@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import styles from './CredentialSections.module.scss'
 import { formatCredentialTimestamp, type AiProviderCredentialRow } from './credentialViewModels'
@@ -18,6 +19,8 @@ interface AiProviderCredentialsSectionProps {
   activeOnly: boolean
   sort: UsageIdentityPageSort
   loading: boolean
+  /** 编辑行消失时，焦点留在当前列表的原生筛选控件，不改变页面容器。 */
+  editFallbackRef?: Ref<HTMLInputElement>
   onEdit?: (row: AiProviderCredentialRow) => void
   onOpenDetails?: (row: AiProviderCredentialRow) => void
   /** 正在写入上游状态的 Keeper identity id 集合，用于阻止重复点击。 */
@@ -30,7 +33,7 @@ interface AiProviderCredentialsSectionProps {
   onSortChange: (sort: UsageIdentityPageSort) => void
 }
 
-export function AiProviderCredentialsSection({ rows, total, page, totalPages, pageSize, activeOnly, sort, loading, onEdit, onOpenDetails, statusPendingIdentityIds, onToggleStatus, onSavePriority, onPageChange, onPageSizeChange, onActiveOnlyChange, onSortChange }: AiProviderCredentialsSectionProps) {
+export function AiProviderCredentialsSection({ rows, total, page, totalPages, pageSize, activeOnly, sort, loading, editFallbackRef, onEdit, onOpenDetails, statusPendingIdentityIds, onToggleStatus, onSavePriority, onPageChange, onPageSizeChange, onActiveOnlyChange, onSortChange }: AiProviderCredentialsSectionProps) {
   const { t } = useTranslation()
   const helpText = t('usage_stats.credentials_ai_providers_active_only_help')
 
@@ -43,7 +46,7 @@ export function AiProviderCredentialsSection({ rows, total, page, totalPages, pa
         <div className={styles.credentialAuthFileTitleControls}>
           <label className={styles.credentialActiveOnlySwitch}>
             <span className={styles.credentialActiveOnlyLabel}>{t('usage_stats.credentials_ai_providers_active_only')}</span>
-            <input type="checkbox" checked={activeOnly} onChange={(event) => onActiveOnlyChange(event.target.checked)} />
+            <input ref={editFallbackRef} type="checkbox" checked={activeOnly} onChange={(event) => onActiveOnlyChange(event.target.checked)} />
             <span className={styles.credentialActiveOnlyTrack} aria-hidden="true">
               <span className={styles.credentialActiveOnlyThumb} />
             </span>
