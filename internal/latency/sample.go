@@ -147,12 +147,11 @@ func UnmarshalSampleSet(encoded []byte) (*SampleSet, error) {
 	return samples, nil
 }
 
-// QuerySampleMerger 独占查询中的样本集合，缓存当前最差保留点。
+// QuerySampleMerger 独占查询中的样本集合和持续维护的最差点堆。
 // TakeSamples 后所有权交还调用方，此前不得通过其他路径修改内部集合。
 type QuerySampleMerger struct {
 	samples *SampleSet
-	worst   SamplePoint
-	full    bool
+	heap    []SamplePoint
 }
 
 func NewQuerySampleMerger() *QuerySampleMerger {
@@ -168,6 +167,10 @@ func (merger *QuerySampleMerger) MergeBinary(encoded []byte) (int, error) {
 	var candidates []SamplePoint
 	var conflictEvent int64
 	count, err := walkSampleSet(encoded, func(point SamplePoint) {
+		// 严格落后于整行开始时的截止点，不可能与已保留 event ID 冲突。
+		if len(merger.heap) == MaxSamplePoints && samplePointLess(merger.heap[0], point) {
+			return
+		}
 		// 旧集合直到整行解析结束保持不变，因此即使该点随后会被裁剪，冲突也不会漏报。
 		if previous, exists := samples.points[point.EventID]; exists {
 			if previous != point && conflictEvent == 0 {
@@ -175,7 +178,7 @@ func (merger *QuerySampleMerger) MergeBinary(encoded []byte) (int, error) {
 			}
 			return
 		}
-		if !merger.full || samplePointLess(point, merger.worst) {
+		if len(merger.heap) < MaxSamplePoints || samplePointLess(point, merger.heap[0]) {
 			candidates = append(candidates, point)
 		}
 	})
@@ -188,19 +191,25 @@ func (merger *QuerySampleMerger) MergeBinary(encoded []byte) (int, error) {
 	if len(candidates) == 0 {
 		return count, nil
 	}
+	// 整行格式与旧集合冲突均通过后才变更 map/heap；写入侧 SampleSet.trim 不参与查询。
 	for _, point := range candidates {
-		samples.points[point.EventID] = point
-	}
-	if worst, trimmed := samples.trim(); trimmed {
-		merger.worst, merger.full = worst, true
-	} else if len(samples.points) == MaxSamplePoints {
-		// 首次达到上限时只扫描一次；后续未入选行不重复扫描。
-		for _, point := range samples.points {
-			if samplePointLess(merger.worst, point) {
-				merger.worst = point
+		if len(merger.heap) < MaxSamplePoints {
+			samples.points[point.EventID] = point
+			merger.heap = append(merger.heap, point)
+			for child := len(merger.heap) - 1; child > 0; {
+				parent := (child - 1) / 2
+				if !samplePointLess(merger.heap[parent], merger.heap[child]) {
+					break
+				}
+				merger.heap[parent], merger.heap[child] = merger.heap[child], merger.heap[parent]
+				child = parent
 			}
+		} else if samplePointLess(point, merger.heap[0]) {
+			delete(samples.points, merger.heap[0].EventID)
+			samples.points[point.EventID] = point
+			merger.heap[0] = point
+			siftDownWorst(merger.heap, 0)
 		}
-		merger.full = true
 	}
 	return count, nil
 }
@@ -212,6 +221,7 @@ func (merger *QuerySampleMerger) TakeSamples() *SampleSet {
 	}
 	samples := merger.samples
 	merger.samples = nil
+	merger.heap = nil
 	return samples
 }
 
