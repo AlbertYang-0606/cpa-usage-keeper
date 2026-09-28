@@ -110,6 +110,8 @@ describe('credentialViewModels', () => {
       ['free-auth', quotaResponse('free-auth', [], undefined, { provider: 'claude', plan: 'free' })],
       ['pro-auth', quotaResponse('pro-auth', [], undefined, { provider: 'claude', plan: 'pro' })],
       ['max-auth', quotaResponse('max-auth', [], undefined, { provider: 'claude', plan: 'max' })],
+      ['max5x-auth', quotaResponse('max5x-auth', [], undefined, { provider: 'claude', plan: 'max-5x' })],
+      ['max20x-auth', quotaResponse('max20x-auth', [], undefined, { provider: 'claude', plan: 'max-20x' })],
       ['team-auth', quotaResponse('team-auth', [], undefined, { provider: 'claude', plan: 'team' })],
     ])
 
@@ -117,6 +119,8 @@ describe('credentialViewModels', () => {
       identity({ identity: 'free-auth', provider: 'claude' }),
       identity({ identity: 'pro-auth', provider: 'claude' }),
       identity({ identity: 'max-auth', provider: 'claude' }),
+      identity({ identity: 'max5x-auth', provider: 'claude' }),
+      identity({ identity: 'max20x-auth', provider: 'claude' }),
       identity({ identity: 'team-auth', provider: 'claude' }),
     ], quotas)
 
@@ -124,6 +128,8 @@ describe('credentialViewModels', () => {
       { kind: 'claude-free', labelKey: 'usage_stats.credentials_subscription_claude_free' },
       { kind: 'claude-pro', labelKey: 'usage_stats.credentials_subscription_claude_pro' },
       { kind: 'claude-max', labelKey: 'usage_stats.credentials_subscription_claude_max' },
+      { kind: 'claude-max5x', labelKey: 'usage_stats.credentials_subscription_claude_max_5x' },
+      { kind: 'claude-max20x', labelKey: 'usage_stats.credentials_subscription_claude_max_20x' },
       { kind: 'claude-team', labelKey: 'usage_stats.credentials_subscription_claude_team' },
     ])
   })
