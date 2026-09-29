@@ -54,6 +54,30 @@ func TestNormalizeClaudeSubscription(t *testing.T) {
 			want: "max",
 		},
 		{
+			name: "max 5x rate limit tier",
+			profile: &quota.ClaudeProfileResponse{
+				Account:      &quota.ClaudeProfileAccount{HasClaudeMax: new(true)},
+				Organization: &quota.ClaudeProfileOrganization{OrganizationType: "claude_max", RateLimitTier: "default_claude_max_5x"},
+			},
+			want: "max-5x",
+		},
+		{
+			name: "max 20x rate limit tier",
+			profile: &quota.ClaudeProfileResponse{
+				Account:      &quota.ClaudeProfileAccount{HasClaudeMax: new(true)},
+				Organization: &quota.ClaudeProfileOrganization{OrganizationType: "claude_max", RateLimitTier: "default_claude_max_20x"},
+			},
+			want: "max-20x",
+		},
+		{
+			name: "max without rate limit tier keeps plain max",
+			profile: &quota.ClaudeProfileResponse{
+				Account:      &quota.ClaudeProfileAccount{HasClaudeMax: new(true)},
+				Organization: &quota.ClaudeProfileOrganization{OrganizationType: "claude_max"},
+			},
+			want: "max",
+		},
+		{
 			name: "pro wins over team",
 			profile: &quota.ClaudeProfileResponse{
 				Account:      &quota.ClaudeProfileAccount{HasClaudeMax: new(false), HasClaudePro: new(true)},
