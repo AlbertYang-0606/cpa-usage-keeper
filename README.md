@@ -218,6 +218,13 @@ curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config
   -o cpa/config.yaml
 ```
 
+In the same directory, download the [CPA + Keeper Compose template](./deploy/docker-compose.full.example.yml):
+
+```bash
+curl -fL https://raw.githubusercontent.com/Willxup/cpa-usage-keeper/main/deploy/docker-compose.full.example.yml \
+  -o docker-compose.yml
+```
+
 Use this download command for a new deployment only; edit an existing configuration directly to avoid overwriting it.
 
 **2. Configure CPA and Keeper**
@@ -227,62 +234,18 @@ The official template uses the v8 configuration layout. Edit the existing settin
 | Setting | What to configure |
 | --- | --- |
 | `management.allow-remote` | Set to `true` so Keeper can access CPA management features from another container. |
-| `management.secret-key` | Set a private management key and use the same original key for `CPA_MANAGEMENT_KEY` below. |
+| `management.secret-key` | Set a private management key and use the same original key for `CPA_MANAGEMENT_KEY` in `docker-compose.yml`. |
 | `observability.usage.usage-statistics-enabled` | Set to `true` to enable usage statistics. |
 | `access.api-keys` | Replace the example keys with your own client API keys; these are separate from the CPA management key and Keeper login password. |
 
-Keep `server.host` as an empty string, `server.port` as `8317`, and `oauth.auth-dir` as `"~/.cli-proxy-api"` to match the container network and volume mounts below. Do not append equivalent legacy settings to the v8 template.
+Keep `server.host` as an empty string, `server.port` as `8317`, and `oauth.auth-dir` as `"~/.cli-proxy-api"` to match the container network and volume mounts in the template. Do not append equivalent legacy settings to the v8 template.
 
-In the same deployment directory, save the following as `docker-compose.yml` and replace `CPA_MANAGEMENT_KEY`:
+Edit the downloaded `docker-compose.yml` and fill in two values under Keeper's `environment`:
 
-```yaml
-services:
-  cli-proxy-api:
-    image: eceasy/cli-proxy-api:latest
-    container_name: cli-proxy-api
-    restart: unless-stopped
-    ports:
-      - "8317:8317"
-      - "1455:1455"
-    volumes:
-      - ./cpa/config.yaml:/CLIProxyAPI/config.yaml
-      - ./cpa/auths:/root/.cli-proxy-api
-      - ./cpa/logs:/CLIProxyAPI/logs
-    networks:
-      - cpa-network
+- `CPA_MANAGEMENT_KEY`: use the same original management key configured in CPA.
+- `LOGIN_PASSWORD`: replace the empty string `""` with your own Keeper login password.
 
-  cpa-usage-keeper:
-    image: ghcr.io/willxup/cpa-usage-keeper:latest
-    container_name: cpa-usage-keeper
-    restart: unless-stopped
-    depends_on:
-      - cli-proxy-api
-    ports:
-      - "8080:8080"
-    environment:
-      TZ: Asia/Shanghai # Sets the container timezone; log timestamps use this timezone.
-      CPA_BASE_URL: http://cli-proxy-api:8317
-      CPA_MANAGEMENT_KEY: replace-with-your-management-key
-      REDIS_QUEUE_ADDR: cli-proxy-api:8317
-      AUTH_ENABLED: true
-      LOGIN_PASSWORD: ${KEEPER_LOGIN_PASSWORD:?set KEEPER_LOGIN_PASSWORD}
-    volumes:
-      - ./keeper:/data
-    networks:
-      - cpa-network
-
-networks:
-  cpa-network:
-    driver: bridge
-```
-
-Create a `.env` file next to `docker-compose.yml` and set your own Keeper login password:
-
-```env
-KEEPER_LOGIN_PASSWORD=
-```
-
-Fill in the value after `=` before starting. This password is for Keeper login and is separate from the CPA management key.
+Alternatively, put the settings in `./keeper/.env`; the template loads it through an optional `env_file` entry and accepts a missing file. Values in `environment` take precedence, so remove the corresponding entries, including empty placeholders, to use values from the file.
 
 **3. Start and open Keeper**
 

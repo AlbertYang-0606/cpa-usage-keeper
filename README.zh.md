@@ -218,6 +218,13 @@ curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config
   -o cpa/config.yaml
 ```
 
+在同一目录下载 [CPA + Keeper 联合部署模板](./deploy/docker-compose.full.example.yml)：
+
+```bash
+curl -fL https://raw.githubusercontent.com/Willxup/cpa-usage-keeper/main/deploy/docker-compose.full.example.yml \
+  -o docker-compose.yml
+```
+
 以上下载命令用于首次部署；已有配置时请直接编辑，避免覆盖。
 
 **2. 填写 CPA 和 Keeper 配置**
@@ -227,62 +234,18 @@ curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config
 | 配置项 | 设置说明 |
 | --- | --- |
 | `management.allow-remote` | 改为 `true`，允许 Keeper 从另一个容器访问 CPA 管理功能。 |
-| `management.secret-key` | 设置私有的管理密钥，并在下方 `CPA_MANAGEMENT_KEY` 中填写同一个原始密钥。 |
+| `management.secret-key` | 设置私有的管理密钥，并在 `docker-compose.yml` 的 `CPA_MANAGEMENT_KEY` 中填写同一个原始密钥。 |
 | `observability.usage.usage-statistics-enabled` | 改为 `true`，开启使用统计。 |
 | `access.api-keys` | 将示例密钥替换为自己的客户端调用密钥；这不是 CPA 管理密钥或 Keeper 登录密码。 |
 
-保留 `server.host` 为空字符串、`server.port` 为 `8317`、`oauth.auth-dir` 为 `"~/.cli-proxy-api"`，以匹配下面的容器网络及目录挂载。不要在 v8 模板中追加同名含义的旧版配置项。
+保留 `server.host` 为空字符串、`server.port` 为 `8317`、`oauth.auth-dir` 为 `"~/.cli-proxy-api"`，以匹配模板中的容器网络及目录挂载。不要在 v8 模板中追加同名含义的旧版配置项。
 
-在同一部署目录中，将下面内容保存为 `docker-compose.yml`，并替换 `CPA_MANAGEMENT_KEY`：
+编辑下载的 `docker-compose.yml`，在 Keeper 的 `environment` 中填写两项：
 
-```yaml
-services:
-  cli-proxy-api:
-    image: eceasy/cli-proxy-api:latest
-    container_name: cli-proxy-api
-    restart: unless-stopped
-    ports:
-      - "8317:8317"
-      - "1455:1455"
-    volumes:
-      - ./cpa/config.yaml:/CLIProxyAPI/config.yaml
-      - ./cpa/auths:/root/.cli-proxy-api
-      - ./cpa/logs:/CLIProxyAPI/logs
-    networks:
-      - cpa-network
+- `CPA_MANAGEMENT_KEY`：填写 CPA 中设置的同一个原始管理密钥。
+- `LOGIN_PASSWORD`：将空字符串 `""` 替换为你自己的 Keeper 登录密码。
 
-  cpa-usage-keeper:
-    image: ghcr.io/willxup/cpa-usage-keeper:latest
-    container_name: cpa-usage-keeper
-    restart: unless-stopped
-    depends_on:
-      - cli-proxy-api
-    ports:
-      - "8080:8080"
-    environment:
-      TZ: Asia/Shanghai # 设置容器时区，日志时间会按该时区显示。
-      CPA_BASE_URL: http://cli-proxy-api:8317
-      CPA_MANAGEMENT_KEY: replace-with-your-management-key
-      REDIS_QUEUE_ADDR: cli-proxy-api:8317
-      AUTH_ENABLED: true
-      LOGIN_PASSWORD: ${KEEPER_LOGIN_PASSWORD:?set KEEPER_LOGIN_PASSWORD}
-    volumes:
-      - ./keeper:/data
-    networks:
-      - cpa-network
-
-networks:
-  cpa-network:
-    driver: bridge
-```
-
-在 `docker-compose.yml` 同一目录新建 `.env` 文件，填写你自己的 Keeper 登录密码：
-
-```env
-KEEPER_LOGIN_PASSWORD=
-```
-
-将 `=` 后的空值填好再启动；这个密码用于登录 Keeper，与 CPA 管理密钥不同。
+也可将配置写入 `./keeper/.env`，模板会通过可选的 `env_file` 读取；文件不存在时不影响 Compose 启动。同名变量以 `environment` 为准，如改用文件中的值，请删除 `environment` 中对应项，包括空值占位。
 
 **3. 启动并访问**
 
