@@ -25,7 +25,9 @@
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/Willxup/cpa-usage-keeper?style=flat-square" alt="MIT License" /></a>
 </p>
 
-CPA Usage Keeper is a standalone persistence and analytics dashboard for [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI). It stores CPA usage in SQLite, pulls CPA configuration and credential data, and provides views for usage, cost, request health, quotas, and model/API statistics.
+Keep usage history for [CLIProxyAPI (CPA)](https://github.com/router-for-me/CLIProxyAPI), understand model costs, and track request performance and credential quotas. CPA Usage Keeper brings overviews, realtime diagnostics, request details, and quota history into one independently deployed dashboard.
+
+**[Add Keeper to an existing CPA](#keeper-only) · [Deploy CPA + Keeper](#cpa--keeper) · [Configuration](#configuration)**
 
 ## Screenshots
 
@@ -88,16 +90,13 @@ CPA Usage Keeper is a standalone persistence and analytics dashboard for [CLIPro
 
 ## Features
 
-- Persist CPA usage data in SQLite, with optional scheduled backups
-- Track requests, tokens, cost, cache usage, success rate, RPM/TPM, and latency, with filters for time range, model, API Key, source, and result
-- Inspect and export request-level events with configurable table columns
-- Analyze usage trends, cost composition, model/API Key/AI Provider mix, hourly heatmaps, and request performance with a realtime TTFT/latency scatter plot
-- Monitor Auth Files and AI Providers with usage metrics, health inspection, quota refresh, credential priority editing, and Codex quota history
-- Opt into community rankings by overall score, tokens, requests, cache rate, average TTFT/latency, or peak TPM/RPM
-- Open a read-only usage view scoped to an individual CPA API Key
-- Sync CPA Auth Files, API Keys, and AI Providers automatically, and maintain model pricing for cost estimates
-- Deploy with Docker/Docker Compose, Homebrew, binaries, or systemd, with optional password protection
-- Embed the Keeper dashboard in CPAMC through the CPA plugin
+- **Keep your history**: persist CPA usage in SQLite with scheduled backups.
+- **Understand costs**: analyze usage, caching, and estimated costs by model, API Key, and provider.
+- **Investigate requests**: inspect and export request details, and explore success rates, time to first token (TTFT), and total latency.
+- **Track quotas**: monitor credential health and remaining quotas, refresh quotas, edit priorities, and explore Codex quota history.
+- **Share scoped access**: provide a read-only usage view for an individual CPA API Key.
+
+Optional community rankings and CPA plugin embedding in CPAMC are also available. Deploy with Docker Compose, Homebrew, or binaries; login protection is enabled by default.
 
 ## Sponsors and Special Thanks
 
@@ -107,11 +106,13 @@ CPA Usage Keeper is a standalone persistence and analytics dashboard for [CLIPro
 
 ## Quick Start
 
-> Before using CPA Usage Keeper, make sure CPA usage statistics are enabled: `usage-statistics-enabled: true`.
+> Before using CPA Usage Keeper, enable CPA usage statistics. Set `observability.usage.usage-statistics-enabled` to `true` in v8 configurations; legacy configurations use the top-level `usage-statistics-enabled` setting.
 >
 > When multiple usage collectors share one CPA instance, ensure they all use subscription mode; otherwise, collection may stop or become incomplete.
 
 Docker Compose is the recommended deployment method. Use the full stack when deploying CPA and Keeper together, or the Keeper-only stack when CPA already exists.
+
+Docker deployment requires Docker and Docker Compose; you do not need Go, Node.js, or a source build. For an existing CPA, have its address and management key ready, and choose a Keeper login password.
 
 | Setup | Recommended path | Architectures |
 | --- | --- | --- |
@@ -124,9 +125,8 @@ Docker Compose is the recommended deployment method. Use the full stack when dep
 
 Login protection is enabled by default. Configure `LOGIN_PASSWORD` before starting Keeper, or explicitly set `AUTH_ENABLED=false` only when access is reliably isolated by the deployment environment.
 
-## Benchmark
-
-Production-style `linux/amd64` capacity measurements for sustained ingestion, Dashboard latency, CPU utilization, and Keeper cgroup peak memory are available in the [Capacity Benchmark Report](./internal/benchmark/REPORT.md).
+<details>
+<summary>Developer reference: project structure, local setup, and tests</summary>
 
 ## Project Structure
 
@@ -196,6 +196,8 @@ npm --prefix ./web run typecheck
 npm --prefix ./web run build
 ```
 
+</details>
+
 ## Deployment
 
 After startup, open `http://your-server-address:8080` (`http://127.0.0.1:8080` for a local deployment) and sign in with your Keeper login password. Adjust the URL if you configure a different port, HTTPS, or a base path.
@@ -205,6 +207,8 @@ After startup, open `http://your-server-address:8080` (`http://127.0.0.1:8080` f
 Docker Compose is recommended for both a complete CPA + Keeper stack and a Keeper-only deployment.
 
 #### CPA + Keeper
+
+**1. Prepare the configuration files**
 
 First, download the configuration example from the [official CPA repository](https://github.com/router-for-me/CLIProxyAPI) into `./cpa/config.yaml` in your deployment directory:
 
@@ -216,16 +220,18 @@ curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config
 
 Use this download command for a new deployment only; edit an existing configuration directly to avoid overwriting it.
 
-Edit the existing settings in `cpa/config.yaml`, preserving YAML indentation:
+**2. Configure CPA and Keeper**
+
+The official template uses the v8 configuration layout. Edit the existing settings in `cpa/config.yaml` as listed below, preserving YAML nesting and indentation. Dots in the table denote nested paths, not literal YAML keys to add:
 
 | Setting | What to configure |
 | --- | --- |
-| `remote-management.allow-remote` | Set to `true` so Keeper can access CPA management features from another container. |
-| `remote-management.secret-key` | Set a private management key and use the same original key for `CPA_MANAGEMENT_KEY` below. |
-| `usage-statistics-enabled` | Set to `true` to enable usage statistics. |
-| `api-keys` | Replace the example keys with your own client API keys; these are separate from the CPA management key and Keeper login password. |
+| `management.allow-remote` | Set to `true` so Keeper can access CPA management features from another container. |
+| `management.secret-key` | Set a private management key and use the same original key for `CPA_MANAGEMENT_KEY` below. |
+| `observability.usage.usage-statistics-enabled` | Set to `true` to enable usage statistics. |
+| `access.api-keys` | Replace the example keys with your own client API keys; these are separate from the CPA management key and Keeper login password. |
 
-Keep the defaults `host: ""`, `port: 8317`, and `auth-dir: "~/.cli-proxy-api"` to match the container network and volume mounts below.
+Keep `server.host` as an empty string, `server.port` as `8317`, and `oauth.auth-dir` as `"~/.cli-proxy-api"` to match the container network and volume mounts below. Do not append equivalent legacy settings to the v8 template.
 
 In the same deployment directory, save the following as `docker-compose.yml` and replace `CPA_MANAGEMENT_KEY`:
 
@@ -270,15 +276,29 @@ networks:
     driver: bridge
 ```
 
-Set `KEEPER_LOGIN_PASSWORD` in the shell or the Compose `.env` file before starting.
+Create a `.env` file next to `docker-compose.yml` and set your own Keeper login password:
 
-Run `docker compose up -d` to start the stack and `docker compose down` to stop it.
+```env
+KEEPER_LOGIN_PASSWORD=
+```
+
+Fill in the value after `=` before starting. This password is for Keeper login and is separate from the CPA management key.
+
+**3. Start and open Keeper**
+
+```bash
+docker compose up -d
+```
+
+Open `http://your-server-address:8080` and sign in with your Keeper password. Run `docker compose down` to stop the stack.
 
 For a new deployment, add model credentials in CPA and make a model request to generate usage records.
 
 CPA data is stored under `./cpa`, and Keeper data is stored under `./keeper`.
 
 #### Keeper Only
+
+**1. Prepare the configuration files**
 
 When CPA is already deployed, download the Keeper-only Compose template and environment configuration into a new deployment directory:
 
@@ -291,6 +311,8 @@ vim .env
 
 For an existing deployment, edit the existing files directly to avoid overwriting your configuration.
 
+**2. Set the connection details and login password**
+
 For CPA running on the Docker host, start with:
 
 ```env
@@ -302,11 +324,21 @@ LOGIN_PASSWORD=
 
 Set a private `LOGIN_PASSWORD` before starting the container.
 
-For other network layouts, set `CPA_BASE_URL` to a CPA address reachable from the container and ensure CPA allows remote management. Set `REDIS_QUEUE_ADDR` only when the Redis/RESP address differs from the automatically derived address.
+Whether CPA runs on the Docker host or another machine, it must allow remote management and listen on an address reachable from the Keeper container; a listener bound only to `127.0.0.1` is not reachable. In v8 configurations, set `management.allow-remote: true` and check `server.host`; legacy configurations use `remote-management.allow-remote` and the top-level `host` setting.
 
-Run `docker compose up -d` to start Keeper and `docker compose down` to stop it.
+For other network layouts, set `CPA_BASE_URL` to a CPA address reachable from the container. Set `REDIS_QUEUE_ADDR` only when the Redis/RESP address differs from the automatically derived address.
+
+**3. Start and open Keeper**
+
+```bash
+docker compose up -d
+```
+
+Open `http://your-server-address:8080` and sign in with your Keeper password. Run `docker compose down` to stop the stack.
 
 Keeper data is stored under `./data` by the provided template.
+
+#### Logs and Updates
 
 For either Compose setup, view Keeper logs from the deployment directory:
 
@@ -320,6 +352,12 @@ To update Keeper, keep your configuration and data directories and run:
 docker compose pull cpa-usage-keeper
 docker compose up -d cpa-usage-keeper
 ```
+
+#### No Data After Startup?
+
+- Check that CPA usage statistics are enabled: `observability.usage.usage-statistics-enabled` must be `true` in v8 configurations, or the top-level `usage-statistics-enabled` in legacy configurations.
+- Ensure Keeper can reach `CPA_BASE_URL` and that `CPA_MANAGEMENT_KEY` matches the CPA management key.
+- Check that CPA has received new model requests. If data is still missing, use the log command above to look for connection or authentication errors.
 
 ### Docker (CPA Already Runs On The Host)
 
@@ -422,7 +460,7 @@ Copy the example config:
 cp .env.example .env
 ```
 
-For first-time deployments, start with "Minimum required", "Login protection", and "Web access and reverse proxy". Most other settings can keep their defaults.
+For a first deployment, set the CPA address, CPA management key, and Keeper login password. Most other settings can keep their defaults. Read the relevant sections when you need a domain, HTTPS, or a base path.
 
 ### Minimum Required
 
@@ -541,6 +579,10 @@ When CPA and Keeper share a browser origin, `CPA_PUBLIC_URL` can be omitted and 
 ```env
 CPA_PUBLIC_URL=https://cpa.example.com
 ```
+
+## Benchmark
+
+Production-style `linux/amd64` capacity measurements for sustained ingestion, Dashboard latency, CPU utilization, and Keeper cgroup peak memory are available in the [Capacity Benchmark Report](./internal/benchmark/REPORT.md).
 
 ## License
 

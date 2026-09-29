@@ -25,7 +25,9 @@
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/Willxup/cpa-usage-keeper?style=flat-square" alt="MIT License" /></a>
 </p>
 
-CPA Usage Keeper 是面向 [CLIProxyAPI（CPA）](https://github.com/router-for-me/CLIProxyAPI) 的独立用量持久化与分析面板。它将 CPA 用量保存到 SQLite，自动拉取 CPA 配置和凭证数据，并提供用量、成本、请求健康、限额及模型/API 统计。
+为 [CLIProxyAPI（CPA）](https://github.com/router-for-me/CLIProxyAPI) 保存用量历史，看清模型花费、请求表现和凭证限额。CPA Usage Keeper 将总览、实时诊断、请求明细与限额历史集中在一个独立部署的面板中。
+
+**[已有 CPA，部署 Keeper](#keeper-only) · [首次部署 CPA + Keeper](#cpa--keeper) · [查看配置](#配置)**
 
 ## 界面预览
 
@@ -88,16 +90,13 @@ CPA Usage Keeper 是面向 [CLIProxyAPI（CPA）](https://github.com/router-for-
 
 ## 功能特性
 
-- 将 CPA 用量持久保存到 SQLite，并支持可选的定时备份
-- 统计请求量、Token、成本、缓存、成功率、RPM/TPM 和延迟，并可按时间、模型、API Key、来源及结果筛选
-- 查看和导出请求级事件，并自定义表格列
-- 分析用量趋势、成本构成、模型/API Key/AI Provider 占比、时段热力图，并通过实时 TTFT/延迟散点图诊断请求表现
-- 监控 Auth Files 与 AI Providers 的用量、健康状态和限额，支持健康巡检、限额刷新、凭证优先级编辑和 Codex 限额历史
-- 可选择加入社区排名，按综合得分、Token、请求量、缓存率、平均 TTFT/延迟或峰值 TPM/RPM 对比表现
-- 为单个 CPA API Key 提供独立的只读用量视图
-- 自动同步 CPA Auth Files、API Keys 和 AI Providers，并维护模型价格用于成本估算
-- 支持 Docker/Docker Compose、Homebrew、二进制和 systemd 部署，并可启用密码保护
-- 通过 CPA 插件将 Keeper Dashboard 嵌入 CPAMC
+- **保留历史**：持续保存 CPA 用量到 SQLite，并支持定时备份。
+- **看清花费**：按模型、API Key 和提供商分析用量、缓存及估算成本。
+- **定位问题**：查看和导出请求明细，通过成功率、首字延迟（TTFT）和总耗时分析请求表现。
+- **掌握额度**：查看凭证健康与剩余限额，支持限额刷新、优先级编辑和 Codex 限额历史。
+- **按需分享**：为单个 CPA API Key 提供独立的只读用量视图。
+
+此外，还支持可选的社区排名，以及通过 CPA 插件嵌入 CPAMC。可使用 Docker Compose、Homebrew 或二进制部署，登录保护默认开启。
 
 ## 赞助与特别感谢
 
@@ -107,11 +106,13 @@ CPA Usage Keeper 是面向 [CLIProxyAPI（CPA）](https://github.com/router-for-
 
 ## 快速开始
 
-> 使用前请确认 CPA 配置已开启 usage 统计：`usage-statistics-enabled: true`。
+> 使用前请确认 CPA 已开启使用统计。v8 配置中的 `observability.usage.usage-statistics-enabled` 应设为 `true`；旧版配置使用顶层 `usage-statistics-enabled`。
 >
 > 同一 CPA 接入多个 usage 采集服务时，请确保均使用订阅模式，否则可能导致收数中断或数据不完整。
 
 Docker Compose 是推荐部署方式：首次部署可同时运行 CPA + Keeper，已有 CPA 时则使用 Keeper-only Compose。
+
+使用 Docker 部署只需准备 Docker 和 Docker Compose，无需安装 Go、Node.js 或编译源码。已有 CPA 时，先准备 CPA 地址、管理密钥和一个 Keeper 登录密码。
 
 | 场景 | 推荐方式 | 架构 |
 | --- | --- | --- |
@@ -124,9 +125,8 @@ Docker Compose 是推荐部署方式：首次部署可同时运行 CPA + Keeper�
 
 登录保护默认启用。启动 Keeper 前请配置 `LOGIN_PASSWORD`；只有部署环境已可靠隔离访问时，才显式设置 `AUTH_ENABLED=false`。
 
-## Benchmark
-
-`linux/amd64` 生产型容量测试覆盖持续 ingestion、Dashboard 延迟、CPU 利用率和 Keeper cgroup 峰值内存，完整结果见 [容量 Benchmark 报告](./internal/benchmark/REPORT.zh.md)。
+<details>
+<summary>开发者参考：项目结构、本地运行与测试</summary>
 
 ## 项目结构
 
@@ -196,6 +196,8 @@ npm --prefix ./web run typecheck
 npm --prefix ./web run build
 ```
 
+</details>
+
 ## 部署方式
 
 启动后访问 `http://服务器地址:8080`（本机部署可用 `http://127.0.0.1:8080`），使用配置的 Keeper 登录密码登录。修改端口或配置 HTTPS、子路径时，请使用对应地址。
@@ -205,6 +207,8 @@ npm --prefix ./web run build
 Docker Compose 同时推荐用于 CPA + Keeper 联合部署和 Keeper 单独部署。
 
 #### CPA + Keeper
+
+**1. 准备配置文件**
 
 先在部署目录中从 [CPA 官方仓库](https://github.com/router-for-me/CLIProxyAPI) 下载配置示例，保存为 `./cpa/config.yaml`：
 
@@ -216,16 +220,18 @@ curl -fL https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/config
 
 以上下载命令用于首次部署；已有配置时请直接编辑，避免覆盖。
 
-编辑 `cpa/config.yaml` 中的已有配置项，保留 YAML 缩进：
+**2. 填写 CPA 和 Keeper 配置**
+
+官方模板采用 v8 配置结构。按下表编辑 `cpa/config.yaml` 中的已有配置项，保留 YAML 层级与缩进；表中的点号表示嵌套路径，不是要新增的 YAML 键名：
 
 | 配置项 | 设置说明 |
 | --- | --- |
-| `remote-management.allow-remote` | 改为 `true`，允许 Keeper 从另一个容器访问 CPA 管理功能。 |
-| `remote-management.secret-key` | 设置私有的管理密钥，并在下方 `CPA_MANAGEMENT_KEY` 中填写同一个原始密钥。 |
-| `usage-statistics-enabled` | 改为 `true`，开启使用统计。 |
-| `api-keys` | 将示例密钥替换为自己的客户端调用密钥；这不是 CPA 管理密钥或 Keeper 登录密码。 |
+| `management.allow-remote` | 改为 `true`，允许 Keeper 从另一个容器访问 CPA 管理功能。 |
+| `management.secret-key` | 设置私有的管理密钥，并在下方 `CPA_MANAGEMENT_KEY` 中填写同一个原始密钥。 |
+| `observability.usage.usage-statistics-enabled` | 改为 `true`，开启使用统计。 |
+| `access.api-keys` | 将示例密钥替换为自己的客户端调用密钥；这不是 CPA 管理密钥或 Keeper 登录密码。 |
 
-保留默认的 `host: ""`、`port: 8317` 和 `auth-dir: "~/.cli-proxy-api"`，以匹配下面的容器网络及目录挂载。
+保留 `server.host` 为空字符串、`server.port` 为 `8317`、`oauth.auth-dir` 为 `"~/.cli-proxy-api"`，以匹配下面的容器网络及目录挂载。不要在 v8 模板中追加同名含义的旧版配置项。
 
 在同一部署目录中，将下面内容保存为 `docker-compose.yml`，并替换 `CPA_MANAGEMENT_KEY`：
 
@@ -270,15 +276,29 @@ networks:
     driver: bridge
 ```
 
-启动前请在 shell 或 Compose `.env` 文件中设置 `KEEPER_LOGIN_PASSWORD`。
+在 `docker-compose.yml` 同一目录新建 `.env` 文件，填写你自己的 Keeper 登录密码：
 
-运行 `docker compose up -d` 启动，使用 `docker compose down` 停止。
+```env
+KEEPER_LOGIN_PASSWORD=
+```
+
+将 `=` 后的空值填好再启动；这个密码用于登录 Keeper，与 CPA 管理密钥不同。
+
+**3. 启动并访问**
+
+```bash
+docker compose up -d
+```
+
+访问 `http://服务器地址:8080`，使用刚设置的 Keeper 登录密码登录。停止服务时执行 `docker compose down`。
 
 首次部署还需在 CPA 中添加模型凭证，调用模型后才会产生使用记录。
 
 CPA 数据保存在 `./cpa`，Keeper 数据保存在 `./keeper`。
 
 #### Keeper Only
+
+**1. 准备配置文件**
 
 CPA 已经部署好时，在新的部署目录中下载 Keeper-only Compose 模板和环境配置：
 
@@ -291,6 +311,8 @@ vim .env
 
 已有部署请直接编辑现有文件，避免覆盖配置。
 
+**2. 填写连接信息和登录密码**
+
 CPA 运行在 Docker 宿主机上时，可从以下配置开始：
 
 ```env
@@ -302,11 +324,21 @@ LOGIN_PASSWORD=
 
 启动容器前请设置私有的 `LOGIN_PASSWORD`。
 
-其它网络环境请将 `CPA_BASE_URL` 改为容器可访问的 CPA 地址，并确认 CPA 允许远程管理。只有 Redis/RESP 地址与自动推导的地址不同时，才需要设置 `REDIS_QUEUE_ADDR`。
+无论 CPA 位于 Docker 宿主机还是其他主机，都需允许远程管理，并监听 Keeper 容器可访问的地址；只监听 `127.0.0.1` 时容器无法连接。v8 配置设置 `management.allow-remote: true`，并检查 `server.host`；旧版对应 `remote-management.allow-remote` 和顶层 `host`。
 
-运行 `docker compose up -d` 启动 Keeper，使用 `docker compose down` 停止。
+其它网络环境请将 `CPA_BASE_URL` 改为容器可访问的 CPA 地址。只有 Redis/RESP 地址与自动推导的地址不同时，才需要设置 `REDIS_QUEUE_ADDR`。
+
+**3. 启动并访问**
+
+```bash
+docker compose up -d
+```
+
+访问 `http://服务器地址:8080`，使用刚设置的 Keeper 登录密码登录。停止服务时执行 `docker compose down`。
 
 模板默认将 Keeper 数据保存在 `./data`。
+
+#### 查看日志与更新
 
 两种 Compose 部署均可在部署目录中查看 Keeper 日志：
 
@@ -320,6 +352,12 @@ docker compose logs --tail=100 -f cpa-usage-keeper
 docker compose pull cpa-usage-keeper
 docker compose up -d cpa-usage-keeper
 ```
+
+#### 启动后没有数据？
+
+- 确认 CPA 使用统计已开启：v8 配置的 `observability.usage.usage-statistics-enabled` 为 `true`；旧版为顶层 `usage-statistics-enabled`。
+- 确认 Keeper 能访问 `CPA_BASE_URL`，且 `CPA_MANAGEMENT_KEY` 与 CPA 管理密钥一致。
+- 确认 CPA 已产生新的模型请求；仍没有数据时，用上面的日志命令检查连接或认证错误。
 
 ### Docker（CPA 已在宿主机运行）
 
@@ -422,7 +460,7 @@ notepad .env
 cp .env.example .env
 ```
 
-新手部署时优先看“最小必填”“登录保护”和“Web 访问与反代”三组，其它配置保持默认即可。
+首次部署先填写 CPA 地址、CPA 管理密钥和 Keeper 登录密码，其余配置通常保持默认。需要域名访问、HTTPS 或子路径时，再查看对应章节。
 
 ### 最小必填
 
@@ -541,6 +579,10 @@ CPA 与 Keeper 浏览器同源时，可以不设置 `CPA_PUBLIC_URL`，“返回
 ```env
 CPA_PUBLIC_URL=https://cpa.example.com
 ```
+
+## Benchmark
+
+`linux/amd64` 生产型容量测试覆盖持续 ingestion、Dashboard 延迟、CPU 利用率和 Keeper cgroup 峰值内存，完整结果见 [容量 Benchmark 报告](./internal/benchmark/REPORT.zh.md)。
 
 ## License
 
